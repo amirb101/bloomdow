@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
+
+
+def normalize_behavior_name(name: str) -> str:
+    """Canonical key for behavior-name lookups across pipeline stages."""
+    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
 
 
 class Modality(str, Enum):
@@ -131,7 +137,7 @@ class Transcript(BaseModel):
     id: str = Field(default_factory=lambda: uuid.uuid4().hex[:12])
     scenario_id: str
     behavior_name: str
-    messages: list[Message]
+    messages: list[Message] = Field(default_factory=list)
     turns_completed: int = 0
     early_termination: bool = False
     target_model: str = ""

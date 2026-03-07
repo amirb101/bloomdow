@@ -32,6 +32,18 @@ async def generate_report(
 
     behavior_summaries = _build_behavior_summaries(behavior_reports)
 
+    if not behavior_reports:
+        logger.warning(
+            "No behavior reports to summarize — skipping executive summary generation."
+        )
+        report.executive_summary = (
+            "No per-behavior results were produced. "
+            "This typically means all scenarios were filtered out during genRM validation, "
+            "all rollouts failed, or behavior names did not match between pipeline stages. "
+            "Check the pipeline logs for warnings."
+        )
+        return report
+
     try:
         messages = [
             {"role": "system", "content": EXECUTIVE_SUMMARY_SYSTEM},

@@ -10,7 +10,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 
 from bloomdow.config import PipelineConfig
-from bloomdow.models import FullReport
+from bloomdow.models import FullReport, normalize_behavior_name
 from bloomdow.report import generate_report, save_report
 from bloomdow.stages.ideation import run_ideation
 from bloomdow.stages.judgment import run_judgment
@@ -112,12 +112,33 @@ class BloomdowPipeline:
             progress.update(task, description=f"[bold green]Stage 2/5 — Understanding: {total_understandings} diverse analyses")
             progress.stop_task(task)
 
+            if not total_understandings:
+                console.print("[bold red]WARNING: No understandings generated — subsequent stages will be empty.[/bold red]")
+                logger.error("Stage 2 produced zero understandings; pipeline will produce empty results.")
+
+            # Warn about behavior-name mismatches between scoping and understanding
+            behavior_names_scoped = {normalize_behavior_name(b.name) for b in behaviors}
+            understanding_keys = {normalize_behavior_name(k) for k in understandings}
+            missing_understandings = behavior_names_scoped - understanding_keys
+            if missing_understandings:
+                logger.warning(
+                    "Behaviors missing understandings (name mismatch?): %s. "
+                    "Scoped: %s, Understanding keys: %s",
+                    missing_understandings,
+                    [b.name for b in behaviors],
+                    list(understandings.keys()),
+                )
+
             # Stage 3: Ideation (SDG: seed -> augment -> genRM validate -> combine)
             task = progress.add_task("[bold cyan]Stage 3/5 — Ideation (SDG)...", total=None)
             scenarios = await run_ideation(behaviors, understandings, config)
             total_scenarios = sum(len(s) for s in scenarios.values())
             progress.update(task, description=f"[bold green]Stage 3/5 — Ideation: {total_scenarios} scenarios")
             progress.stop_task(task)
+
+            if not total_scenarios:
+                console.print("[bold red]WARNING: No scenarios survived genRM validation — rollouts will be empty.[/bold red]")
+                logger.error("Stage 3 produced zero validated scenarios; pipeline will produce empty results.")
 
             # Stage 4: Rollout
             task = progress.add_task(f"[bold cyan]Stage 4/5 — Rollout ({total_scenarios} scenarios)...", total=None)
@@ -126,11 +147,19 @@ class BloomdowPipeline:
             progress.update(task, description=f"[bold green]Stage 4/5 — Rollout: {total_transcripts} transcripts collected")
             progress.stop_task(task)
 
+            if not total_transcripts:
+                console.print("[bold red]WARNING: No transcripts collected — judgment will be empty.[/bold red]")
+                logger.error("Stage 4 produced zero transcripts; pipeline will produce empty results.")
+
             # Stage 5: Judgment
             task = progress.add_task(f"[bold cyan]Stage 5/5 — Judgment ({total_transcripts} transcripts)...", total=None)
             behavior_reports = await run_judgment(behaviors, transcripts, config)
             progress.update(task, description=f"[bold green]Stage 5/5 — Judgment: {len(behavior_reports)} behavior reports")
             progress.stop_task(task)
+
+            if not behavior_reports:
+                console.print("[bold red]WARNING: No behavior reports generated — report will have empty results.[/bold red]")
+                logger.error("Stage 5 produced zero behavior reports.")
 
         # Build the full report
         report = await generate_report(behavior_reports, config)

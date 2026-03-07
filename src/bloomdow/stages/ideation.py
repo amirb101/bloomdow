@@ -13,6 +13,7 @@ from bloomdow.models import (
     Scenario,
     UnderstandingDocument,
     ValidationResult,
+    normalize_behavior_name,
 )
 from bloomdow.prompts.ideation import (
     AUGMENTATION_SYSTEM,
@@ -303,8 +304,13 @@ async def run_ideation(
     semaphore = asyncio.Semaphore(config.max_concurrency)
     result: dict[str, list[Scenario]] = {}
 
+    norm_understandings = {
+        normalize_behavior_name(k): v for k, v in all_understandings.items()
+    }
+
     for behavior in behaviors:
-        understandings = all_understandings.get(behavior.name)
+        norm_key = normalize_behavior_name(behavior.name)
+        understandings = norm_understandings.get(norm_key)
         if not understandings:
             logger.warning("No understandings for %s, skipping ideation", behavior.name)
             result[behavior.name] = []

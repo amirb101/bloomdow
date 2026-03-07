@@ -14,6 +14,7 @@ from bloomdow.models import (
     RolloutScore,
     SecondaryQuality,
     Transcript,
+    normalize_behavior_name,
 )
 from bloomdow.prompts.judgment import (
     JUDGE_SYSTEM,
@@ -153,12 +154,20 @@ async def run_judgment(
     logger.info("Stage 5 — Judgment: scoring %d behavior suites", len(behaviors))
 
     semaphore = asyncio.Semaphore(config.max_concurrency)
-    behavior_map = {b.name: b for b in behaviors}
+    behavior_map = {normalize_behavior_name(b.name): b for b in behaviors}
     reports: list[BehaviorReport] = []
 
     for behavior_name, behavior_transcripts in transcripts.items():
-        behavior = behavior_map.get(behavior_name)
+        norm_key = normalize_behavior_name(behavior_name)
+        behavior = behavior_map.get(norm_key)
         if not behavior:
+            logger.warning(
+                "No matching behavior for transcript key %r (normalized: %r). "
+                "Known behaviors: %s",
+                behavior_name,
+                norm_key,
+                list(behavior_map.keys()),
+            )
             continue
 
         logger.info(

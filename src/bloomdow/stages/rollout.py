@@ -14,6 +14,7 @@ from bloomdow.models import (
     Scenario,
     Transcript,
     UnderstandingDocument,
+    normalize_behavior_name,
 )
 from bloomdow.prompts.rollout import (
     ROLLOUT_SYSTEM,
@@ -175,9 +176,13 @@ def _get_understanding(
 ) -> UnderstandingDocument | None:
     """Resolve one understanding per behavior (first of list) for rollout context."""
     lst = understandings.get(behavior_name)
-    if not lst:
-        return None
-    return lst[0]
+    if lst:
+        return lst[0]
+    norm_key = normalize_behavior_name(behavior_name)
+    for key, val in understandings.items():
+        if normalize_behavior_name(key) == norm_key and val:
+            return val[0]
+    return None
 
 
 async def run_rollouts(
