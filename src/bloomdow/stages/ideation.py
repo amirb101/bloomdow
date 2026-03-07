@@ -23,14 +23,18 @@ from bloomdow.prompts.ideation import (
 
 logger = logging.getLogger(__name__)
 
+_MAX_SCENARIOS_PER_CALL = 3
+_BEDROCK_CONCURRENCY = 3
 
-async def _ideate_base_scenarios(
+
+async def _ideate_batch(
     behavior: BehaviorDimension,
     understanding: UnderstandingDocument,
-    num_base: int,
+    count: int,
     config: PipelineConfig,
+    semaphore: asyncio.Semaphore,
 ) -> list[Scenario]:
-    """Generate the base (unique) scenarios for one behavior."""
+    """Generate a small batch of base scenarios in a single LLM call."""
     messages = [
         {"role": "system", "content": IDEATION_SYSTEM},
         {
@@ -38,42 +42,78 @@ async def _ideate_base_scenarios(
             "content": ideation_user_message(
                 behavior.name,
                 understanding.full_text,
-                num_base,
+                count,
                 behavior.modality.value,
                 behavior.suggested_turns,
             ),
         },
     ]
 
-    data = await complete_json(
-        model=config.evaluator_model,
-        messages=messages,
-        api_key=config.evaluator_api_key,
-        api_base=config.evaluator_api_base,
-        temperature=0.8,
-        max_tokens=8192,
-    )
-
-    scenarios: list[Scenario] = []
-    for raw in data.get("scenarios", []):
-        scenario = Scenario(
-            behavior_name=behavior.name,
-            situation=raw.get("situation", ""),
-            user_persona=raw.get("user_persona", ""),
-            target_system_prompt=raw.get("target_system_prompt", ""),
-            environment=raw.get("environment", ""),
-            example_manifestation=raw.get("example_manifestation", ""),
-            modality=behavior.modality,
-            max_turns=behavior.suggested_turns,
+    async with semaphore:
+        data = await complete_json(
+            model=config.evaluator_model,
+            messages=messages,
+            api_key=config.evaluator_api_key,
+            api_base=config.evaluator_api_base,
+            temperature=0.8,
+            max_tokens=6144,
         )
-        scenarios.append(scenario)
 
-    return scenarios[:num_base]
+    raw_list = data if isinstance(data, list) else data.get("scenarios", [])
+    scenarios: list[Scenario] = []
+    for raw in raw_list:
+        if not isinstance(raw, dict):
+            continue
+        scenarios.append(
+            Scenario(
+                behavior_name=behavior.name,
+                situation=raw.get("situation", ""),
+                user_persona=raw.get("user_persona", ""),
+                target_system_prompt=raw.get("target_system_prompt", ""),
+                environment=raw.get("environment", ""),
+                example_manifestation=raw.get("example_manifestation", ""),
+                modality=behavior.modality,
+                max_turns=behavior.suggested_turns,
+            )
+        )
+    return scenarios[:count]
+
+
+async def _ideate_base_scenarios(
+    behavior: BehaviorDimension,
+    understanding: UnderstandingDocument,
+    num_base: int,
+    config: PipelineConfig,
+    semaphore: asyncio.Semaphore,
+) -> list[Scenario]:
+    """Generate base scenarios, batching into smaller LLM calls to avoid timeouts."""
+    remaining = num_base
+    all_scenarios: list[Scenario] = []
+
+    while remaining > 0:
+        batch_size = min(remaining, _MAX_SCENARIOS_PER_CALL)
+        logger.info(
+            "Ideating %d scenarios for %s (%d remaining)",
+            batch_size, behavior.name, remaining,
+        )
+        try:
+            batch = await _ideate_batch(behavior, understanding, batch_size, config, semaphore)
+            all_scenarios.extend(batch)
+            remaining -= len(batch)
+            if not batch:
+                logger.warning("Empty batch for %s, breaking", behavior.name)
+                break
+        except Exception as exc:
+            logger.error("Ideation batch failed for %s: %s", behavior.name, exc)
+            break
+
+    return all_scenarios
 
 
 async def _generate_variation(
     base: Scenario,
     config: PipelineConfig,
+    semaphore: asyncio.Semaphore,
 ) -> Scenario:
     """Produce a single surface-level variation of a base scenario."""
     base_dict = {
@@ -88,14 +128,15 @@ async def _generate_variation(
         {"role": "user", "content": variation_user_message(json.dumps(base_dict, indent=2))},
     ]
 
-    data = await complete_json(
-        model=config.evaluator_model,
-        messages=messages,
-        api_key=config.evaluator_api_key,
-        api_base=config.evaluator_api_base,
-        temperature=0.9,
-        max_tokens=4096,
-    )
+    async with semaphore:
+        data = await complete_json(
+            model=config.evaluator_model,
+            messages=messages,
+            api_key=config.evaluator_api_key,
+            api_base=config.evaluator_api_base,
+            temperature=0.9,
+            max_tokens=4096,
+        )
 
     return Scenario(
         behavior_name=base.behavior_name,
@@ -115,6 +156,7 @@ async def _expand_scenarios(
     base_scenarios: list[Scenario],
     total_needed: int,
     config: PipelineConfig,
+    semaphore: asyncio.Semaphore,
 ) -> list[Scenario]:
     """Expand base scenarios via variation to reach total_needed."""
     if len(base_scenarios) >= total_needed:
@@ -126,7 +168,7 @@ async def _expand_scenarios(
     variation_tasks = []
     for i in range(variations_needed):
         base = base_scenarios[i % len(base_scenarios)]
-        variation_tasks.append(_generate_variation(base, config))
+        variation_tasks.append(_generate_variation(base, config, semaphore))
 
     results = await asyncio.gather(*variation_tasks, return_exceptions=True)
     for result in results:
@@ -138,39 +180,61 @@ async def _expand_scenarios(
     return all_scenarios[:total_needed]
 
 
+async def _ideate_for_behavior(
+    behavior: BehaviorDimension,
+    understanding: UnderstandingDocument,
+    config: PipelineConfig,
+    semaphore: asyncio.Semaphore,
+) -> tuple[str, list[Scenario]]:
+    """Generate all scenarios (base + variations) for a single behavior."""
+    diversity = behavior.suggested_diversity
+    n = config.num_rollouts
+    num_base = max(1, math.ceil(n * diversity))
+
+    logger.info(
+        "Ideating for %s: %d base scenarios -> %d total (diversity=%.2f)",
+        behavior.name, num_base, n, diversity,
+    )
+
+    base = await _ideate_base_scenarios(behavior, understanding, num_base, config, semaphore)
+    if not base:
+        logger.error("No base scenarios generated for %s", behavior.name)
+        return behavior.name, []
+
+    expanded = await _expand_scenarios(base, n, config, semaphore)
+    logger.info("Ideation for %s: got %d scenarios", behavior.name, len(expanded))
+    return behavior.name, expanded
+
+
 async def run_ideation(
     behaviors: list[BehaviorDimension],
     understandings: dict[str, UnderstandingDocument],
     config: PipelineConfig,
 ) -> dict[str, list[Scenario]]:
-    """Generate evaluation scenarios for all behaviors."""
+    """Generate evaluation scenarios for all behaviors in parallel."""
     logger.info(
         "Stage 3 — Ideation: generating scenarios for %d behaviors", len(behaviors)
     )
 
-    all_scenarios: dict[str, list[Scenario]] = {}
+    semaphore = asyncio.Semaphore(_BEDROCK_CONCURRENCY)
 
+    tasks = []
     for behavior in behaviors:
         understanding = understandings.get(behavior.name)
         if not understanding:
             logger.warning("No understanding for %s, skipping ideation", behavior.name)
             continue
+        tasks.append(_ideate_for_behavior(behavior, understanding, config, semaphore))
 
-        diversity = behavior.suggested_diversity
-        n = config.num_rollouts
-        num_base = max(1, math.ceil(n * diversity))
+    results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        logger.info(
-            "Ideating for %s: %d base scenarios -> %d total (diversity=%.2f)",
-            behavior.name, num_base, n, diversity,
-        )
-
-        base = await _ideate_base_scenarios(behavior, understanding, num_base, config)
-        expanded = await _expand_scenarios(base, n, config)
-        all_scenarios[behavior.name] = expanded
-
-        logger.info(
-            "Ideation for %s: got %d scenarios", behavior.name, len(expanded)
-        )
+    all_scenarios: dict[str, list[Scenario]] = {}
+    for result in results:
+        if isinstance(result, Exception):
+            logger.error("Ideation failed: %s", result)
+            continue
+        name, scenarios = result
+        if scenarios:
+            all_scenarios[name] = scenarios
 
     return all_scenarios

@@ -29,7 +29,7 @@ class BloomdowPipeline:
         self,
         target_model: str,
         concern: str,
-        evaluator_model: str = "bedrock/anthropic.claude-sonnet-4-20250514-v1:0",
+        evaluator_model: str = "anthropic/claude-sonnet-4-20250514",
         target_api_key: str | None = None,
         target_api_base: str | None = None,
         evaluator_api_key: str | None = None,

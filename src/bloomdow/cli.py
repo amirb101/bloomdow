@@ -52,7 +52,7 @@ def main():
 )
 @click.option(
     "--evaluator", "-e",
-    default="bedrock/anthropic.claude-sonnet-4-20250514-v1:0",
+    default="anthropic/claude-sonnet-4-20250514",
     show_default=True,
     help="Evaluator model identifier (used for scoping, ideation, rollout, judgment).",
 )
@@ -95,7 +95,7 @@ def main():
 )
 @click.option(
     "--max-concurrency",
-    default=10,
+    default=3,
     show_default=True,
     type=int,
     help="Maximum concurrent rollouts.",

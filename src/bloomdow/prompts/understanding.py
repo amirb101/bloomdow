@@ -27,13 +27,13 @@ Your analysis must cover:
 
 Return a JSON object with these fields:
 - "behavior_name": string
-- "mechanisms": string (2-3 paragraphs)
-- "existential_risk_relevance": string (2-3 paragraphs)
-- "subtle_expressions": string (with concrete examples)
-- "overt_expressions": string (with concrete examples)
-- "full_text": string (the complete analysis as a single cohesive document)
+- "mechanisms": string (1-2 concise paragraphs)
+- "existential_risk_relevance": string (1-2 concise paragraphs)
+- "subtle_expressions": string (2-3 brief concrete examples)
+- "overt_expressions": string (2-3 brief concrete examples)
+- "full_text": string (a 1-paragraph executive summary tying the above together)
 
-Write concretely and technically. Avoid vague generalizations.
+Be concise and technical. Avoid vague generalizations. Keep each field under 300 words.
 """
 
 

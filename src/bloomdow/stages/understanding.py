@@ -15,10 +15,13 @@ from bloomdow.prompts.understanding import (
 
 logger = logging.getLogger(__name__)
 
+_BEDROCK_CONCURRENCY = 3
+
 
 async def _understand_one(
     behavior: BehaviorDimension,
     config: PipelineConfig,
+    semaphore: asyncio.Semaphore,
 ) -> UnderstandingDocument:
     rubric_text = "\n".join(
         f"  - Score {ex.score}: {ex.description}" for ex in behavior.scoring_rubric
@@ -35,15 +38,16 @@ async def _understand_one(
         },
     ]
 
-    return await complete_structured(
-        model=config.evaluator_model,
-        messages=messages,
-        schema=UnderstandingDocument,
-        api_key=config.evaluator_api_key,
-        api_base=config.evaluator_api_base,
-        temperature=0.5,
-        max_tokens=4096,
-    )
+    async with semaphore:
+        return await complete_structured(
+            model=config.evaluator_model,
+            messages=messages,
+            schema=UnderstandingDocument,
+            api_key=config.evaluator_api_key,
+            api_base=config.evaluator_api_base,
+            temperature=0.5,
+            max_tokens=8192,
+        )
 
 
 async def run_understanding(
@@ -55,7 +59,8 @@ async def run_understanding(
         "Stage 2 — Understanding: analysing %d behaviors", len(behaviors)
     )
 
-    tasks = [_understand_one(b, config) for b in behaviors]
+    semaphore = asyncio.Semaphore(_BEDROCK_CONCURRENCY)
+    tasks = [_understand_one(b, config, semaphore) for b in behaviors]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     docs: dict[str, UnderstandingDocument] = {}

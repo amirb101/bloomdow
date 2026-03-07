@@ -13,48 +13,42 @@ pip install -e .
 ### CLI Usage
 
 ```bash
-# Bedrock with bearer token (default evaluator is also Bedrock)
-export AWS_BEARER_TOKEN_BEDROCK="your-bearer-token"
-bloomdow run \
-  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
-  --concern "power-seeking, deceptive alignment, resistance to shutdown"
-
-# Bedrock with explicit bearer token flags
-bloomdow run \
-  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
-  --api-key "your-bearer-token" \
-  --concern "power-seeking, deceptive alignment, resistance to shutdown"
-
-# Bedrock target + custom Bedrock endpoint
-bloomdow run \
-  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
-  --api-key "your-bearer-token" \
-  --api-base "https://bedrock-runtime.us-west-2.amazonaws.com" \
-  --concern "self-replication and resource acquisition"
-
-# Different target and evaluator models on Bedrock
-bloomdow run \
-  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
-  --api-key "target-bearer-token" \
-  --evaluator "bedrock/anthropic.claude-opus-4-20250514-v1:0" \
-  --evaluator-api-key "evaluator-bearer-token" \
-  --concern "manipulation, corrigibility failures, collusion between AI systems" \
-  --num-rollouts 50
-
-# Non-Bedrock providers still work (Anthropic direct, OpenAI, HuggingFace)
+# Anthropic API (simplest — just set ANTHROPIC_API_KEY)
+export ANTHROPIC_API_KEY="sk-ant-..."
 bloomdow run \
   --model "anthropic/claude-sonnet-4-20250514" \
-  --api-key "sk-ant-..." \
-  --evaluator "anthropic/claude-sonnet-4-20250514" \
-  --evaluator-api-key "sk-ant-..." \
-  --concern "power-seeking, deceptive alignment"
+  --concern "power-seeking, deceptive alignment, resistance to shutdown"
 
-# HuggingFace model
+# AWS Bedrock with bearer token
+export AWS_BEARER_TOKEN_BEDROCK="your-bearer-token"
+bloomdow run \
+  --model "bedrock/anthropic.claude-sonnet-4-6" \
+  --evaluator "bedrock/anthropic.claude-sonnet-4-6" \
+  --concern "power-seeking, deceptive alignment, resistance to shutdown"
+
+# Bedrock with explicit token flags + custom endpoint
+bloomdow run \
+  --model "bedrock/anthropic.claude-sonnet-4-6" \
+  --api-key "your-bearer-token" \
+  --api-base "https://bedrock-runtime.us-west-2.amazonaws.com" \
+  --evaluator "bedrock/anthropic.claude-sonnet-4-6" \
+  --evaluator-api-key "your-bearer-token" \
+  --evaluator-api-base "https://bedrock-runtime.us-west-2.amazonaws.com" \
+  --concern "self-replication and resource acquisition"
+
+# HuggingFace target, Anthropic evaluator
 HUGGING_FACE_TOKEN=hf_xxx bloomdow run \
   --model "huggingface/meta-llama/Llama-3.3-70B-Instruct" \
-  --concern "self-replication and resource acquisition" \
-  --evaluator "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
-  --evaluator-api-key "your-bearer-token"
+  --concern "self-replication and resource acquisition"
+
+# Full options
+bloomdow run \
+  --model "anthropic/claude-sonnet-4-20250514" \
+  --concern "manipulation, corrigibility failures, collusion between AI systems" \
+  --num-rollouts 50 \
+  --diversity 0.6 \
+  --max-turns 10 \
+  --output-dir ./my-results
 ```
 
 ### Library API
@@ -64,11 +58,8 @@ import asyncio
 from bloomdow import BloomdowPipeline
 
 pipeline = BloomdowPipeline(
-    target_model="bedrock/anthropic.claude-sonnet-4-20250514-v1:0",
-    target_api_key="your-bearer-token",
+    target_model="anthropic/claude-sonnet-4-20250514",
     concern="power-seeking, deceptive alignment, resistance to shutdown",
-    evaluator_model="bedrock/anthropic.claude-sonnet-4-20250514-v1:0",
-    evaluator_api_key="your-bearer-token",
     num_rollouts=20,
     diversity=0.5,
 )
@@ -78,9 +69,13 @@ print(report.executive_summary)
 
 ## Authentication
 
-### AWS Bedrock (default)
+### Anthropic API (default)
 
-Bloomdow defaults to Bedrock model identifiers. Authentication options:
+Set `ANTHROPIC_API_KEY` as an environment variable. The default evaluator model is `anthropic/claude-sonnet-4-20250514`.
+
+### AWS Bedrock
+
+Use `bedrock/` model prefix. Authentication options:
 
 1. **Environment variable** (recommended):
    ```bash
@@ -99,13 +94,17 @@ Bloomdow defaults to Bedrock model identifiers. Authentication options:
    --evaluator-api-base "https://bedrock-runtime.us-east-1.amazonaws.com"
    ```
 
-You can also set these via environment variables: `TARGET_API_KEY`, `TARGET_API_BASE`, `EVALUATOR_API_KEY`, `EVALUATOR_API_BASE`.
+Available Bedrock model IDs:
+- `bedrock/anthropic.claude-sonnet-4-6` (newest, widest availability)
+- `bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0`
+- `bedrock/anthropic.claude-sonnet-4-6`
+
+All flags also accept environment variables: `TARGET_API_KEY`, `TARGET_API_BASE`, `EVALUATOR_API_KEY`, `EVALUATOR_API_BASE`.
 
 ### Other Providers
 
 Bloomdow uses [LiteLLM](https://docs.litellm.ai/) under the hood, so any supported provider works. Set the appropriate environment variables:
 
-- **Anthropic direct**: `ANTHROPIC_API_KEY`
 - **OpenAI**: `OPENAI_API_KEY`
 - **HuggingFace**: `HUGGING_FACE_TOKEN`
 
@@ -159,7 +158,7 @@ bloomdow-results/<run-id>/
 | `--concern` | (required) | Natural-language safety concerns |
 | `--api-key` | — | Bearer token / API key for target model |
 | `--api-base` | — | Base URL for target model API |
-| `--evaluator` | `bedrock/anthropic.claude-sonnet-4-20250514-v1:0` | Model for scoping, ideation, rollout, judgment |
+| `--evaluator` | `anthropic/claude-sonnet-4-20250514` | Model for scoping, ideation, rollout, judgment |
 | `--evaluator-api-key` | — | Bearer token / API key for evaluator |
 | `--evaluator-api-base` | — | Base URL for evaluator model API |
 | `--num-rollouts` | 20 | Rollouts per behavior |
@@ -171,8 +170,8 @@ bloomdow-results/<run-id>/
 
 Bloomdow uses [LiteLLM](https://docs.litellm.ai/) for model access. Any model supported by LiteLLM works:
 
-- **AWS Bedrock** (default): `bedrock/anthropic.claude-sonnet-4-20250514-v1:0`, `bedrock/anthropic.claude-opus-4-20250514-v1:0`
-- **Anthropic**: `anthropic/claude-sonnet-4-20250514`, `anthropic/claude-opus-4-20250514`
+- **Anthropic** (default): `anthropic/claude-sonnet-4-20250514`, `anthropic/claude-opus-4-20250514`
+- **AWS Bedrock**: `bedrock/anthropic.claude-sonnet-4-6`, `bedrock/anthropic.claude-sonnet-4-5-20250929-v1:0`
 - **OpenAI**: `openai/gpt-4o`, `openai/o1`
 - **HuggingFace**: `huggingface/meta-llama/Llama-3.3-70B-Instruct`
 - **Local**: Any OpenAI-compatible endpoint via `openai/model-name` with `--api-base`
@@ -180,7 +179,7 @@ Bloomdow uses [LiteLLM](https://docs.litellm.ai/) for model access. Any model su
 ## Requirements
 
 - Python >= 3.11
-- API access to at least one LLM provider (Bedrock bearer token recommended)
+- API access to at least one LLM provider
 
 ## License
 

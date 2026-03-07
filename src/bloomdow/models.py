@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Modality(str, Enum):
@@ -81,6 +82,13 @@ class Scenario(BaseModel):
     max_turns: int = 5
     is_variation: bool = False
     parent_scenario_id: str | None = None
+
+    @field_validator("environment", "situation", "user_persona", "target_system_prompt", "example_manifestation", mode="before")
+    @classmethod
+    def _coerce_to_str(cls, v: Any) -> str:
+        if isinstance(v, (dict, list)):
+            return json.dumps(v, indent=2)
+        return str(v)
 
 
 # ---------------------------------------------------------------------------
