@@ -9,3 +9,11 @@ build/
 .env
 .venv/
 venv/
+
+# UI
+ui/.venv/
+ui/backend/evaluations.db
+ui/backend/__pycache__/
+ui/frontend/node_modules/
+ui/frontend/dist/
+bloomdow-results/

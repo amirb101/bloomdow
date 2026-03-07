@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .input-field {
+    @apply bg-[#16181f] border border-[#2a2d3a] rounded-lg px-3 py-2 text-sm text-[#e8eaf0] placeholder-[#555b6e]
+           focus:outline-none focus:border-[#4f5fff] focus:ring-1 focus:ring-[#4f5fff]/30
+           transition-colors;
+  }
+
+  select.input-field option {
+    background: #16181f;
+  }
+}
+
+@layer base {
+  :root {
+    --bg-primary: #0a0b0f;
+    --bg-secondary: #111318;
+    --bg-card: #16181f;
+    --bg-hover: #1e2029;
+    --border: #2a2d3a;
+    --border-subtle: #1e2029;
+    --text-primary: #e8eaf0;
+    --text-secondary: #8b90a0;
+    --text-muted: #555b6e;
+    --accent: #4f5fff;
+    --accent-hover: #3a3ff5;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: "Inter", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2d3a; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3d4a; }
+}
