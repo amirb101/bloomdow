@@ -29,7 +29,7 @@ class BloomdowPipeline:
         self,
         target_model: str,
         concern: str,
-        evaluator_model: str = "anthropic/claude-sonnet-4-20250514",
+        evaluator_model: str | None = "anthropic/claude-sonnet-4-20250514",
         target_api_key: str | None = None,
         target_api_base: str | None = None,
         evaluator_api_key: str | None = None,
@@ -41,13 +41,14 @@ class BloomdowPipeline:
         judge_samples: int = 1,
         output_dir: str = "bloomdow-results",
     ):
+        resolved_evaluator = evaluator_model or target_model
         self.config = PipelineConfig(
             target_model=target_model,
             target_api_key=target_api_key,
             target_api_base=target_api_base,
-            evaluator_model=evaluator_model,
-            evaluator_api_key=evaluator_api_key,
-            evaluator_api_base=evaluator_api_base,
+            evaluator_model=resolved_evaluator,
+            evaluator_api_key=evaluator_api_key or target_api_key,
+            evaluator_api_base=evaluator_api_base or target_api_base,
             concern=concern,
             num_rollouts=num_rollouts,
             diversity=diversity,
