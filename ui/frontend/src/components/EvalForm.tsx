@@ -4,11 +4,26 @@ import { cn } from "../lib/utils";
 import type { StartEvalRequest } from "../lib/api";
 
 const PROVIDERS = [
-  { id: "anthropic", label: "Anthropic", models: ["anthropic/claude-opus-4-20250514", "anthropic/claude-sonnet-4-20250514"] },
-  { id: "openai",    label: "OpenAI",    models: ["openai/gpt-4o", "openai/gpt-4-turbo", "openai/o1"] },
-  { id: "bedrock",   label: "AWS Bedrock", models: ["bedrock/anthropic.claude-sonnet-4-20250514-v1:0", "bedrock/anthropic.claude-opus-4-20250514-v1:0"] },
-  { id: "huggingface", label: "HuggingFace", models: ["huggingface/meta-llama/Llama-3.3-70B-Instruct", "huggingface/mistralai/Mistral-7B-Instruct-v0.2"] },
-  { id: "custom",    label: "Custom / Local", models: [] },
+  { id: "anthropic", label: "Anthropic", models: ["anthropic/claude-opus-4-20250514", "anthropic/claude-sonnet-4-20250514"], keyHint: "sk-ant-..." },
+  { id: "openai",    label: "OpenAI",    models: ["openai/gpt-4o", "openai/gpt-4-turbo", "openai/o1"], keyHint: "sk-..." },
+  { id: "deepseek",  label: "DeepSeek",  models: ["deepseek/deepseek-chat", "deepseek/deepseek-coder", "deepseek/deepseek-reasoner"], keyHint: "sk-... (from platform.deepseek.com)" },
+  { id: "bedrock",   label: "AWS Bedrock", models: ["bedrock/anthropic.claude-sonnet-4-20250514-v1:0", "bedrock/anthropic.claude-opus-4-20250514-v1:0"], keyHint: "Bearer token" },
+  { id: "huggingface", label: "HuggingFace", models: ["huggingface/meta-llama/Llama-3.3-70B-Instruct", "huggingface/mistralai/Mistral-7B-Instruct-v0.2", "huggingface/together/deepseek-ai/DeepSeek-R1"], keyHint: "hf_... (from huggingface.co/settings/tokens)" },
+  { id: "custom",    label: "Custom / Local", models: [], keyHint: "API key for your endpoint" },
+];
+
+const EVALUATOR_PRESETS = [
+  { id: "deepseek", label: "DeepSeek (cheap)", model: "deepseek/deepseek-chat", keyHint: "DeepSeek API key" },
+  { id: "gpt4o-mini", label: "GPT-4o-mini (cheap)", model: "openai/gpt-4o-mini", keyHint: "OpenAI API key" },
+  { id: "claude-haiku", label: "Claude Haiku", model: "anthropic/claude-3-5-haiku-20241022", keyHint: "Anthropic API key" },
+  { id: "bedrock", label: "Bedrock (default)", model: "bedrock/anthropic.claude-sonnet-4-20250514-v1:0", keyHint: "AWS bearer token" },
+  { id: "custom", label: "Custom", model: "", keyHint: "Enter model below" },
+];
+
+const COST_PRESETS = [
+  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, diversity: 0.3, desc: "~2 rollouts/behavior, quick smoke test" },
+  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, diversity: 0.5, desc: "~10 rollouts, balanced" },
+  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, diversity: 0.7, desc: "~20 rollouts, thorough" },
 ];
 
 const CONCERN_PRESETS = [
@@ -28,16 +43,34 @@ export default function EvalForm({ onSubmit, loading }: Props) {
   const [provider, setProvider]           = useState(PROVIDERS[0]);
   const [model, setModel]                 = useState(PROVIDERS[0].models[0]);
   const [customModel, setCustomModel]     = useState("");
+  const [useSavedKeys, setUseSavedKeys]   = useState(false);
   const [apiKey, setApiKey]               = useState("");
   const [apiBase, setApiBase]             = useState("");
   const [concern, setConcern]             = useState("");
-  const [evalModel, setEvalModel]         = useState("bedrock/anthropic.claude-sonnet-4-20250514-v1:0");
+  const [evalPreset, setEvalPreset]       = useState("deepseek");
+  const [evalModel, setEvalModel]         = useState("deepseek/deepseek-chat");
   const [evalApiKey, setEvalApiKey]       = useState("");
   const [showAdvanced, setShowAdvanced]   = useState(false);
-  const [numRollouts, setNumRollouts]     = useState(20);
-  const [diversity, setDiversity]         = useState(0.5);
-  const [maxTurns, setMaxTurns]           = useState(5);
-  const [maxConcurrency, setMaxConcurrency] = useState(10);
+  const [costPreset, setCostPreset]       = useState<"low" | "medium" | "high">("low");
+  const [numRollouts, setNumRollouts]     = useState(2);
+  const [diversity, setDiversity]         = useState(0.3);
+  const [maxTurns, setMaxTurns]           = useState(3);
+  const [maxConcurrency, setMaxConcurrency] = useState(3);
+
+  function applyEvalPreset(id: string) {
+    const p = EVALUATOR_PRESETS.find(x => x.id === id);
+    if (!p) return;
+    setEvalPreset(id);
+    if (p.model) setEvalModel(p.model);
+  }
+
+  function applyCostPreset(id: "low" | "medium" | "high") {
+    const p = COST_PRESETS.find(x => x.id === id)!;
+    setCostPreset(id);
+    setNumRollouts(p.rollouts);
+    setMaxTurns(p.maxTurns);
+    setDiversity(p.diversity);
+  }
 
   function handleProviderChange(id: string) {
     const p = PROVIDERS.find(p => p.id === id) ?? PROVIDERS[0];
@@ -52,10 +85,10 @@ export default function EvalForm({ onSubmit, loading }: Props) {
     onSubmit({
       target_model: targetModel,
       concern,
-      target_api_key: apiKey || undefined,
+      target_api_key: useSavedKeys ? undefined : (apiKey || undefined),
       target_api_base: apiBase || undefined,
       evaluator_model: evalModel,
-      evaluator_api_key: evalApiKey || undefined,
+      evaluator_api_key: useSavedKeys ? undefined : (evalApiKey || undefined),
       num_rollouts: numRollouts,
       diversity,
       max_turns: maxTurns,
@@ -75,13 +108,28 @@ export default function EvalForm({ onSubmit, loading }: Props) {
         </p>
       </div>
 
-      {/* Target Model */}
+      {/* Config — saved keys */}
+      <div className="border border-[var(--border)] rounded-lg p-4 bg-[var(--bg-card)]">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={useSavedKeys}
+            onChange={e => setUseSavedKeys(e.target.checked)}
+            className="rounded border-[var(--border)] bg-[var(--bg-primary)] text-brand-600 focus:ring-brand-500"
+          />
+          <span className="text-sm font-medium text-[var(--text-primary)]">Use saved keys (from server config)</span>
+        </label>
+        <p className="text-xs text-[var(--text-muted)] mt-2">
+          Keys are read from <code className="bg-[var(--bg-hover)] px-1 rounded">ui/backend/.env</code>. Copy from <code className="bg-[var(--bg-hover)] px-1 rounded">.env.example</code> and fill in. Never stored in the browser.
+        </p>
+      </div>
+
+      {/* Target Model — Step 1: Provider */}
       <div className="space-y-3">
         <label className="block text-xs font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
-          Target Model
+          1. Select provider & model
         </label>
 
-        {/* Provider tabs */}
         <div className="flex flex-wrap gap-2">
           {PROVIDERS.map(p => (
             <button
@@ -100,13 +148,12 @@ export default function EvalForm({ onSubmit, loading }: Props) {
           ))}
         </div>
 
-        {/* Model selector or custom input */}
         {provider.id === "custom" ? (
           <input
             type="text"
             value={customModel}
             onChange={e => setCustomModel(e.target.value)}
-            placeholder="openai/my-model or http://localhost:11434/v1 model"
+            placeholder="e.g. openai/gpt-4o or openai/model-name with custom api_base"
             className="input-field w-full"
           />
         ) : (
@@ -121,35 +168,42 @@ export default function EvalForm({ onSubmit, loading }: Props) {
           </select>
         )}
 
-        {/* API Key */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs text-[var(--text-secondary)] mb-1">API Key / Bearer Token</label>
-            <input
-              type="password"
-              value={apiKey}
-              onChange={e => setApiKey(e.target.value)}
-              placeholder="sk-... or bearer token"
-              className="input-field w-full"
-            />
+        {/* Step 2: API Key — hidden when using saved keys */}
+        {!useSavedKeys && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1">
+                2. API key for {provider.label}
+              </label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder={provider.keyHint}
+                className="input-field w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-1">API base URL <span className="text-[var(--text-muted)]">(optional)</span></label>
+              <input
+                type="text"
+                value={apiBase}
+                onChange={e => setApiBase(e.target.value)}
+                placeholder="Custom endpoint, e.g. https://..."
+                className="input-field w-full"
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-xs text-[var(--text-secondary)] mb-1">API Base URL (optional)</label>
-            <input
-              type="text"
-              value={apiBase}
-              onChange={e => setApiBase(e.target.value)}
-              placeholder="https://..."
-              className="input-field w-full"
-            />
-          </div>
-        </div>
+        )}
+        {useSavedKeys && (
+          <p className="text-xs text-[var(--text-muted)]">Using keys from <code className="bg-[var(--bg-hover)] px-1 rounded">.env</code></p>
+        )}
       </div>
 
       {/* Safety Concern */}
       <div className="space-y-3">
         <label className="block text-xs font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
-          Safety Concern
+          3. Safety concern to evaluate
         </label>
 
         {/* Presets */}
@@ -194,26 +248,72 @@ export default function EvalForm({ onSubmit, loading }: Props) {
 
         {showAdvanced && (
           <div className="px-4 pb-4 pt-2 space-y-4 border-t border-[var(--border)]">
-            {/* Evaluator model */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1">Evaluator Model</label>
-                <input
-                  type="text"
-                  value={evalModel}
-                  onChange={e => setEvalModel(e.target.value)}
-                  className="input-field w-full"
-                />
+            {/* Cost presets */}
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-2">Cost preset (queries / rollouts)</label>
+              <div className="flex flex-wrap gap-2">
+                {COST_PRESETS.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => applyCostPreset(p.id as "low" | "medium" | "high")}
+                    className={cn(
+                      "px-3 py-2 rounded-lg text-left border transition-all",
+                      costPreset === p.id
+                        ? "border-brand-500 bg-brand-500/10 text-brand-400"
+                        : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    )}
+                  >
+                    <span className="block text-sm font-medium">{p.label}</span>
+                    <span className="block text-xs text-[var(--text-muted)] mt-0.5">{p.desc}</span>
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1">Evaluator API Key</label>
-                <input
-                  type="password"
-                  value={evalApiKey}
-                  onChange={e => setEvalApiKey(e.target.value)}
-                  placeholder="sk-..."
-                  className="input-field w-full"
-                />
+            </div>
+
+            {/* Evaluator model — runs the pipeline (scoping, ideation, judgment) */}
+            <div>
+              <label className="block text-xs text-[var(--text-secondary)] mb-2">Evaluator model (LiteLLM)</label>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {EVALUATOR_PRESETS.map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => applyEvalPreset(p.id)}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded text-sm font-medium transition-all border",
+                      evalPreset === p.id
+                        ? "border-brand-500 text-brand-400 bg-brand-500/10"
+                        : "border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--text-muted)]"
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              <div className={cn("grid gap-3", useSavedKeys ? "grid-cols-1" : "grid-cols-2")}>
+                <div>
+                  <label className="block text-xs text-[var(--text-secondary)] mb-1">Model string</label>
+                  <input
+                    type="text"
+                    value={evalModel}
+                    onChange={e => { setEvalModel(e.target.value); setEvalPreset("custom"); }}
+                    placeholder="provider/model-name"
+                    className="input-field w-full"
+                  />
+                </div>
+                {!useSavedKeys && (
+                  <div>
+                    <label className="block text-xs text-[var(--text-secondary)] mb-1">Evaluator API key</label>
+                    <input
+                      type="password"
+                      value={evalApiKey}
+                      onChange={e => setEvalApiKey(e.target.value)}
+                      placeholder={EVALUATOR_PRESETS.find(p => p.id === evalPreset)?.keyHint ?? "sk-..."}
+                      className="input-field w-full"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

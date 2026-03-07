@@ -1,13 +1,20 @@
 """FastAPI backend for Bloomdow UI."""
 from __future__ import annotations
 
+from pathlib import Path
+
+# Load .env before any bloomdow/litellm imports so keys are available
+_env_path = Path(__file__).parent / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path)
+
 import asyncio
 import json
 import sys
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from fastapi import FastAPI, HTTPException
@@ -49,13 +56,13 @@ class StartEvalRequest(BaseModel):
     concern: str
     target_api_key: str | None = None
     target_api_base: str | None = None
-    evaluator_model: str = "bedrock/anthropic.claude-sonnet-4-20250514-v1:0"
+    evaluator_model: str = "anthropic/claude-sonnet-4-20250514"
     evaluator_api_key: str | None = None
     evaluator_api_base: str | None = None
     num_rollouts: int = 20
     diversity: float = 0.5
     max_turns: int = 5
-    max_concurrency: int = 10
+    max_concurrency: int = 3
 
 
 # ── Pipeline with progress emission ──────────────────────────────────────────

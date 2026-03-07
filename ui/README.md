@@ -6,7 +6,7 @@ A full-stack web interface for the Bloomdow automated AI safety evaluation pipel
 
 ## Overview
 
-The UI wraps the core `bloomdow` Python package in a web application that lets non-technical users (e.g. analysts at a defence or government agency) run existential-risk behavioral evaluations on frontier LLMs — without touching the CLI.
+The UI wraps the core `bloomdow` Python package in a web application. Bloomdow uses [LiteLLM](https://docs.litellm.ai/) for all LLM calls — see [LITELLM.md](./LITELLM.md) for how it works and supported providers. that lets non-technical users (e.g. analysts at a defence or government agency) run existential-risk behavioral evaluations on frontier LLMs — without touching the CLI.
 
 **Stack:**
 - **Backend**: FastAPI (Python) — wraps `BloomdowPipeline`, streams live progress via Server-Sent Events, persists all results to SQLite
@@ -291,18 +291,15 @@ After merging their changes:
 
 ## Environment Variables
 
-### Backend
+### Backend / API Keys
 
-The backend inherits env vars from the shell, same as the CLI. Set these before running `start.sh` if needed:
+**Option A: Use saved keys (recommended)** — Add keys to `ui/backend/.env` (copy from `.env.example`), then check "Use saved keys" in the UI. Keys never leave the server.
 
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
-export AWS_BEARER_TOKEN_BEDROCK="..."
-export HUGGING_FACE_TOKEN="hf_..."
-```
+**Option B: Paste in the form** — Keys are sent per-request and are **never stored** in the database.
 
-Users can also paste keys directly into the UI form — they are passed to the pipeline per-request and are **never stored** in the database (redacted to `***` in the config snapshot).
+**If you don't provide keys** — LiteLLM falls back to env vars. If neither form nor env has a key for the selected provider, the evaluation will fail with an auth error.
+
+**Evaluator** — An evaluator is always used (default: DeepSeek). If you don't enter an evaluator key, it uses the same env vars (e.g. `DEEPSEEK_API_KEY` for DeepSeek).
 
 ### Frontend
 
