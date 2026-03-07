@@ -299,6 +299,8 @@ After merging their changes:
 
 **Evaluator** — An evaluator is always used (default: DeepSeek). If you don't enter an evaluator key, it uses the same env vars (e.g. `DEEPSEEK_API_KEY` for DeepSeek).
 
+**Embeddings** — Stage 2 (Understanding) uses `text-embedding-3-small` (OpenAI) for diversity checks. You need `OPENAI_API_KEY` in `.env` even when using DeepSeek for target/evaluator.
+
 ### Frontend
 
 `ui/frontend/.env`:

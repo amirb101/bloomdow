@@ -1,6 +1,8 @@
 """FastAPI backend for Bloomdow UI."""
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 
 # Load .env before any bloomdow/litellm imports so keys are available
@@ -28,6 +30,9 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from db import fail_evaluation, get_evaluation, init_db, insert_evaluation, complete_evaluation, list_evaluations
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
 # in-memory progress queues keyed by run_id
 _progress_queues: dict[str, asyncio.Queue] = {}
@@ -83,17 +88,25 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
         from bloomdow.stages.scoping import run_scoping
         from bloomdow.stages.understanding import run_understanding
 
+        # Embeddings use text-embedding-3-small (OpenAI) by default — needs OPENAI_API_KEY
+        embedding_api_key = (os.environ.get("OPENAI_API_KEY") or "").strip() or None
+
+        # Strip keys in case of copy-paste whitespace/newlines
+        target_key = (req.target_api_key or "").strip() or None
+        eval_key = (req.evaluator_api_key or "").strip() or None
+
         config = PipelineConfig(
             target_model=req.target_model,
             concern=req.concern,
-            target_api_key=req.target_api_key,
+            target_api_key=target_key,
             target_api_base=req.target_api_base,
             evaluator_model=req.evaluator_model,
-            evaluator_api_key=req.evaluator_api_key,
+            evaluator_api_key=eval_key,
             evaluator_api_base=req.evaluator_api_base,
             num_rollouts=req.num_rollouts,
             max_turns=req.max_turns,
             max_concurrency=req.max_concurrency,
+            embedding_api_key=embedding_api_key,
         )
 
         # Stage 1
@@ -138,6 +151,7 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
 
     except Exception as exc:
         error_msg = str(exc)
+        logger.exception("Evaluation %s failed: %s", run_id, error_msg)
         fail_evaluation(run_id, error_msg)
         await emit("error", {"message": error_msg})
     finally:
