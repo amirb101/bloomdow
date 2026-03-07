@@ -9,7 +9,6 @@ export interface StartEvalRequest {
   evaluator_api_key?: string;
   evaluator_api_base?: string;
   num_rollouts?: number;
-  diversity?: number;
   max_turns?: number;
   max_concurrency?: number;
 }

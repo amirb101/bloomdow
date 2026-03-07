@@ -21,9 +21,9 @@ const EVALUATOR_PRESETS = [
 ];
 
 const COST_PRESETS = [
-  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, diversity: 0.3, desc: "~2 rollouts/behavior, quick smoke test" },
-  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, diversity: 0.5, desc: "~10 rollouts, balanced" },
-  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, diversity: 0.7, desc: "~20 rollouts, thorough" },
+  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, desc: "~2 rollouts/behavior, quick smoke test" },
+  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, desc: "~10 rollouts, balanced" },
+  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, desc: "~20 rollouts, thorough" },
 ];
 
 const CONCERN_PRESETS = [
@@ -53,7 +53,6 @@ export default function EvalForm({ onSubmit, loading }: Props) {
   const [showAdvanced, setShowAdvanced]   = useState(false);
   const [costPreset, setCostPreset]       = useState<"low" | "medium" | "high">("low");
   const [numRollouts, setNumRollouts]     = useState(2);
-  const [diversity, setDiversity]         = useState(0.3);
   const [maxTurns, setMaxTurns]           = useState(3);
   const [maxConcurrency, setMaxConcurrency] = useState(3);
 
@@ -69,7 +68,6 @@ export default function EvalForm({ onSubmit, loading }: Props) {
     setCostPreset(id);
     setNumRollouts(p.rollouts);
     setMaxTurns(p.maxTurns);
-    setDiversity(p.diversity);
   }
 
   function handleProviderChange(id: string) {
@@ -90,7 +88,6 @@ export default function EvalForm({ onSubmit, loading }: Props) {
       evaluator_model: evalModel,
       evaluator_api_key: useSavedKeys ? undefined : (evalApiKey || undefined),
       num_rollouts: numRollouts,
-      diversity,
       max_turns: maxTurns,
       max_concurrency: maxConcurrency,
     });
@@ -318,16 +315,10 @@ export default function EvalForm({ onSubmit, loading }: Props) {
             </div>
 
             {/* Numeric params */}
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div>
                 <label className="block text-xs text-[var(--text-secondary)] mb-1">Rollouts / behavior</label>
                 <input type="number" min={1} max={100} value={numRollouts} onChange={e => setNumRollouts(+e.target.value)} className="input-field w-full" />
-              </div>
-              <div>
-                <label className="block text-xs text-[var(--text-secondary)] mb-1">
-                  Diversity <span className="text-[var(--text-muted)]">(0–1)</span>
-                </label>
-                <input type="number" min={0} max={1} step={0.1} value={diversity} onChange={e => setDiversity(+e.target.value)} className="input-field w-full" />
               </div>
               <div>
                 <label className="block text-xs text-[var(--text-secondary)] mb-1">Max turns</label>

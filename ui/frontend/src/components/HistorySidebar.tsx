@@ -78,10 +78,13 @@ function SidebarItem({
   onDelete: (e: React.MouseEvent) => void;
 }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(); } }}
       className={cn(
-        "w-full text-left px-4 py-3 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors group relative",
+        "w-full text-left px-4 py-3 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors group relative cursor-pointer",
         selected && "bg-brand-500/8 border-l-2 border-l-brand-500"
       )}
     >
@@ -100,13 +103,14 @@ function SidebarItem({
           </p>
         </div>
         <button
+          type="button"
           onClick={onDelete}
           className="opacity-0 group-hover:opacity-100 p-1 rounded text-[var(--text-muted)] hover:text-red-400 transition-all shrink-0"
         >
           <Trash2 size={12} />
         </button>
       </div>
-    </button>
+    </div>
   );
 }
 

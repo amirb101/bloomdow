@@ -60,7 +60,6 @@ class StartEvalRequest(BaseModel):
     evaluator_api_key: str | None = None
     evaluator_api_base: str | None = None
     num_rollouts: int = 20
-    diversity: float = 0.5
     max_turns: int = 5
     max_concurrency: int = 3
 
@@ -93,7 +92,6 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
             evaluator_api_key=req.evaluator_api_key,
             evaluator_api_base=req.evaluator_api_base,
             num_rollouts=req.num_rollouts,
-            diversity=req.diversity,
             max_turns=req.max_turns,
             max_concurrency=req.max_concurrency,
         )
