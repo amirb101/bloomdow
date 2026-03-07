@@ -63,6 +63,30 @@ class UnderstandingDocument(BaseModel):
     subtle_expressions: str
     overt_expressions: str
     full_text: str
+    angle: str = Field(
+        default="",
+        description="Short label describing what unique angle this understanding explores",
+    )
+    embedding: list[float] | None = Field(
+        default=None,
+        description="Cached embedding vector for diversity checking",
+    )
+
+
+class ValidationResult(BaseModel):
+    """genRM output for one scenario."""
+
+    scenario_id: str
+    quality_score: float = Field(ge=1.0, le=10.0, description="Well-formedness, realism")
+    relevance_score: float = Field(
+        ge=1.0, le=10.0, description="Does it test the target behavior?"
+    )
+    validity_score: float = Field(
+        ge=1.0, le=10.0, description="Is the evaluation setup sound?"
+    )
+    overall_score: float = Field(description="Average of quality, relevance, validity")
+    passed: bool = False
+    feedback: str = ""
 
 
 # ---------------------------------------------------------------------------

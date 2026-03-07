@@ -13,28 +13,47 @@ pip install -e .
 ### CLI Usage
 
 ```bash
-# Anthropic API (simplest — just set ANTHROPIC_API_KEY)
+# Bedrock with bearer token (default evaluator is also Bedrock)
+export AWS_BEARER_TOKEN_BEDROCK="your-bearer-token"
+bloomdow run \
+  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
+  --concern "power-seeking, deceptive alignment, resistance to shutdown"
+
+# Bedrock with explicit bearer token flags
+bloomdow run \
+  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
+  --api-key "your-bearer-token" \
+  --concern "power-seeking, deceptive alignment, resistance to shutdown"
+
+# Bedrock target + custom Bedrock endpoint
+bloomdow run \
+  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
+  --api-key "your-bearer-token" \
+  --api-base "https://bedrock-runtime.us-west-2.amazonaws.com" \
+  --concern "self-replication and resource acquisition"
+
+# Different target and evaluator models on Bedrock
+bloomdow run \
+  --model "bedrock/anthropic.claude-sonnet-4-20250514-v1:0" \
+  --api-key "target-bearer-token" \
+  --evaluator "bedrock/anthropic.claude-opus-4-20250514-v1:0" \
+  --evaluator-api-key "evaluator-bearer-token" \
+  --concern "manipulation, corrigibility failures, collusion between AI systems" \
+  --num-rollouts 50
+
+# Anthropic-only: one API key, Haiku for evaluator, llama.cpp for embeddings
+# (requires llama-server running on port 8776 — see "Anthropic-only" section below)
 export ANTHROPIC_API_KEY="sk-ant-..."
 bloomdow run \
   --model "anthropic/claude-sonnet-4-20250514" \
-  --concern "power-seeking, deceptive alignment, resistance to shutdown"
+  --api-key "sk-ant-..." \
+  --anthropic-api-key \
+  --concern "power-seeking, deceptive alignment"
 
-# AWS Bedrock with bearer token
-export AWS_BEARER_TOKEN_BEDROCK="your-bearer-token"
+# Non-Bedrock providers still work (Anthropic direct, OpenAI, HuggingFace)
 bloomdow run \
-  --model "bedrock/anthropic.claude-sonnet-4-6" \
-  --evaluator "bedrock/anthropic.claude-sonnet-4-6" \
+  --model "anthropic/claude-sonnet-4-20250514" \
   --concern "power-seeking, deceptive alignment, resistance to shutdown"
-
-# Bedrock with explicit token flags + custom endpoint
-bloomdow run \
-  --model "bedrock/anthropic.claude-sonnet-4-6" \
-  --api-key "your-bearer-token" \
-  --api-base "https://bedrock-runtime.us-west-2.amazonaws.com" \
-  --evaluator "bedrock/anthropic.claude-sonnet-4-6" \
-  --evaluator-api-key "your-bearer-token" \
-  --evaluator-api-base "https://bedrock-runtime.us-west-2.amazonaws.com" \
-  --concern "self-replication and resource acquisition"
 
 # HuggingFace target, Anthropic evaluator
 HUGGING_FACE_TOKEN=hf_xxx bloomdow run \
@@ -101,6 +120,37 @@ Available Bedrock model IDs:
 
 All flags also accept environment variables: `TARGET_API_KEY`, `TARGET_API_BASE`, `EVALUATOR_API_KEY`, `EVALUATOR_API_BASE`.
 
+### Anthropic-only (one key)
+
+Use `--anthropic-api-key` (or `ANTHROPIC_API_KEY`) to run all evaluator inference with **Claude 3.5 Haiku** via the Anthropic API. No Bedrock or separate evaluator key is required. Embeddings use a local **llama.cpp** server running `nomic-embed-text-v1.5` — no extra API key needed.
+
+**Setup (one-time):**
+
+```bash
+# Install llama.cpp (macOS example)
+brew install llama.cpp
+
+# Download the nomic-embed-text GGUF model
+curl -L -o nomic-embed-text-v1.5.Q8_0.gguf \
+  https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf
+
+# Start the embedding server (keep running in a separate terminal)
+llama-server --embedding --port 8776 -m nomic-embed-text-v1.5.Q8_0.gguf
+```
+
+**Run Bloomdow:**
+
+```bash
+export ANTHROPIC_API_KEY="sk-ant-..."
+bloomdow run \
+  --model "anthropic/claude-sonnet-4-20250514" \
+  --api-key "sk-ant-..." \
+  --anthropic-api-key \
+  --concern "power-seeking, deceptive alignment"
+```
+
+The target model (`--model` / `--api-key`) can still be any LiteLLM-supported model; only the evaluator path uses Haiku when `--anthropic-api-key` is set.
+
 ### Other Providers
 
 Bloomdow uses [LiteLLM](https://docs.litellm.ai/) under the hood, so any supported provider works. Set the appropriate environment variables:
@@ -161,6 +211,7 @@ bloomdow-results/<run-id>/
 | `--evaluator` | `anthropic/claude-sonnet-4-20250514` | Model for scoping, ideation, rollout, judgment |
 | `--evaluator-api-key` | — | Bearer token / API key for evaluator |
 | `--evaluator-api-base` | — | Base URL for evaluator model API |
+| `--anthropic-api-key` | — | Use Anthropic API for evaluator (Claude Haiku); embeddings via local llama.cpp on port 8776 |
 | `--num-rollouts` | 20 | Rollouts per behavior |
 | `--diversity` | 0.5 | Scenario diversity (0-1) |
 | `--max-turns` | 5 | Max conversational turns per rollout |

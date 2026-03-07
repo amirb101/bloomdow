@@ -35,7 +35,15 @@ class BloomdowPipeline:
         evaluator_api_key: str | None = None,
         evaluator_api_base: str | None = None,
         num_rollouts: int = 20,
-        diversity: float = 0.5,
+        num_diverse_understandings: int = 5,
+        seed_scenarios_per_understanding: int = 10,
+        target_scenarios_per_understanding: int = 100,
+        min_cosine_distance: float = 0.3,
+        genrm_threshold: float = 7.0,
+        embedding_model: str = "text-embedding-3-small",
+        embedding_api_key: str | None = None,
+        embedding_api_base: str | None = None,
+        max_diversity_retries: int = 3,
         max_turns: int = 5,
         max_concurrency: int = 10,
         judge_samples: int = 1,
@@ -50,7 +58,15 @@ class BloomdowPipeline:
             evaluator_api_base=evaluator_api_base,
             concern=concern,
             num_rollouts=num_rollouts,
-            diversity=diversity,
+            num_diverse_understandings=num_diverse_understandings,
+            seed_scenarios_per_understanding=seed_scenarios_per_understanding,
+            target_scenarios_per_understanding=target_scenarios_per_understanding,
+            min_cosine_distance=min_cosine_distance,
+            genrm_threshold=genrm_threshold,
+            embedding_model=embedding_model,
+            embedding_api_key=embedding_api_key,
+            embedding_api_base=embedding_api_base,
+            max_diversity_retries=max_diversity_retries,
             max_turns=max_turns,
             max_concurrency=max_concurrency,
             judge_samples=judge_samples,
@@ -63,12 +79,13 @@ class BloomdowPipeline:
 
         console.print(
             Panel.fit(
-                f"[bold]Bloomdow[/bold] — Existential-Risk Behavioral Evaluation\n\n"
+                f"[bold]Bloomdow[/bold] — Existential-Risk Behavioral Evaluation (SDG)\n\n"
                 f"Target: [cyan]{config.target_model}[/cyan]\n"
                 f"Evaluator: [cyan]{config.evaluator_model}[/cyan]\n"
                 f"Concern: [yellow]{config.concern}[/yellow]\n"
-                f"Rollouts/behavior: {config.num_rollouts} | "
-                f"Diversity: {config.diversity} | Max turns: {config.max_turns}",
+                f"Diverse understandings: {config.num_diverse_understandings} | "
+                f"Seed/target per understanding: {config.seed_scenarios_per_understanding}/{config.target_scenarios_per_understanding} | "
+                f"Min cosine dist: {config.min_cosine_distance} | Max turns: {config.max_turns}",
                 border_style="blue",
             )
         )
@@ -87,17 +104,18 @@ class BloomdowPipeline:
 
             _print_behaviors(behaviors)
 
-            # Stage 2: Understanding
-            task = progress.add_task("[bold cyan]Stage 2/5 — Understanding...", total=None)
+            # Stage 2: Diverse Understanding (embed + cosine diversity)
+            task = progress.add_task("[bold cyan]Stage 2/5 — Diverse Understanding...", total=None)
             understandings = await run_understanding(behaviors, config)
-            progress.update(task, description=f"[bold green]Stage 2/5 — Understanding: {len(understandings)} analyses complete")
+            total_understandings = sum(len(u) for u in understandings.values())
+            progress.update(task, description=f"[bold green]Stage 2/5 — Understanding: {total_understandings} diverse analyses")
             progress.stop_task(task)
 
-            # Stage 3: Ideation
-            task = progress.add_task("[bold cyan]Stage 3/5 — Ideation...", total=None)
+            # Stage 3: Ideation (SDG: seed -> augment -> genRM validate -> combine)
+            task = progress.add_task("[bold cyan]Stage 3/5 — Ideation (SDG)...", total=None)
             scenarios = await run_ideation(behaviors, understandings, config)
             total_scenarios = sum(len(s) for s in scenarios.values())
-            progress.update(task, description=f"[bold green]Stage 3/5 — Ideation: {total_scenarios} scenarios generated")
+            progress.update(task, description=f"[bold green]Stage 3/5 — Ideation: {total_scenarios} scenarios")
             progress.stop_task(task)
 
             # Stage 4: Rollout

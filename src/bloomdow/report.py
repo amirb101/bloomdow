@@ -26,7 +26,7 @@ async def generate_report(
         evaluator_model=config.evaluator_model,
         concern=config.concern,
         num_rollouts_per_behavior=config.num_rollouts,
-        diversity=config.diversity,
+        diversity=config.min_cosine_distance,
         behavior_reports=behavior_reports,
     )
 

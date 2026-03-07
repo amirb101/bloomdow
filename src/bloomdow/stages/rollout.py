@@ -169,9 +169,20 @@ async def _run_single_rollout(
         return transcript
 
 
+def _get_understanding(
+    understandings: dict[str, list[UnderstandingDocument]],
+    behavior_name: str,
+) -> UnderstandingDocument | None:
+    """Resolve one understanding per behavior (first of list) for rollout context."""
+    lst = understandings.get(behavior_name)
+    if not lst:
+        return None
+    return lst[0]
+
+
 async def run_rollouts(
     scenarios: dict[str, list[Scenario]],
-    understandings: dict[str, UnderstandingDocument],
+    understandings: dict[str, list[UnderstandingDocument]],
     config: PipelineConfig,
     progress_callback: object | None = None,
 ) -> dict[str, list[Transcript]]:
@@ -183,7 +194,7 @@ async def run_rollouts(
 
     tasks: list[tuple[str, asyncio.Task]] = []
     for behavior_name, behavior_scenarios in scenarios.items():
-        understanding = understandings.get(behavior_name)
+        understanding = _get_understanding(understandings, behavior_name)
         if not understanding:
             continue
 

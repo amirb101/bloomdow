@@ -251,6 +251,32 @@ def _coerce_to_schema(data: Any, schema: type) -> dict[str, Any]:
     return data
 
 
+async def embed(
+    model: str,
+    texts: list[str],
+    *,
+    api_key: str | None = None,
+    api_base: str | None = None,
+    timeout: int = _DEFAULT_TIMEOUT,
+    max_retries: int = _DEFAULT_MAX_RETRIES,
+) -> list[list[float]]:
+    """Return embedding vectors for each input text using LiteLLM aembedding."""
+    kwargs: dict[str, Any] = dict(
+        model=model,
+        input=texts,
+        timeout=timeout,
+        num_retries=max_retries,
+    )
+    if api_key:
+        kwargs["api_key"] = api_key
+    if api_base:
+        kwargs["api_base"] = api_base
+
+    response = await litellm.aembedding(**kwargs)
+    data = response.get("data", []) if isinstance(response, dict) else getattr(response, "data", [])
+    return [item["embedding"] for item in data]
+
+
 def _parse_json(raw: str) -> Any:
     """Parse JSON from a string, stripping common markdown wrappers."""
     text = raw.strip()
