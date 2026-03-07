@@ -121,6 +121,15 @@ export default function EvalForm({ onSubmit, loading }: Props) {
         </p>
       </div>
 
+      {/* OpenAI key required for embeddings */}
+      <div className="flex gap-2 p-3 rounded-lg bg-sky-500/5 border border-sky-500/20 text-sm text-sky-300">
+        <span className="font-semibold shrink-0">Required:</span>
+        <span>
+          <code className="bg-[var(--bg-hover)] px-1 rounded">OPENAI_API_KEY</code> in <code className="bg-[var(--bg-hover)] px-1 rounded">.env</code> — Stage 2 uses OpenAI embeddings for diversity checks. Very cheap (~$0.001/run). Get one at{" "}
+          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline hover:text-sky-200">platform.openai.com/api-keys</a>.
+        </span>
+      </div>
+
       {/* Target Model — Step 1: Provider */}
       <div className="space-y-3">
         <label className="block text-xs font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
