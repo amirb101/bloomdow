@@ -12,6 +12,8 @@ export interface StartEvalRequest {
   num_rollouts?: number;
   max_turns?: number;
   max_concurrency?: number;
+  max_diversity_retries?: number;
+  min_cosine_distance?: number;
 }
 
 export interface EvalListItem {

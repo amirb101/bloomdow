@@ -68,6 +68,8 @@ class StartEvalRequest(BaseModel):
     num_rollouts: int = 20
     max_turns: int = 5
     max_concurrency: int = 3
+    max_diversity_retries: int = 3
+    min_cosine_distance: float = 0.3
 
 
 # ── Pipeline with progress emission ──────────────────────────────────────────
@@ -108,6 +110,8 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
             max_turns=req.max_turns,
             max_concurrency=req.max_concurrency,
             embedding_api_key=embedding_key,
+            max_diversity_retries=req.max_diversity_retries,
+            min_cosine_distance=req.min_cosine_distance,
         )
 
         # Stage 1

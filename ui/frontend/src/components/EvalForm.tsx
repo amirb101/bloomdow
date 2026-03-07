@@ -21,9 +21,9 @@ const EVALUATOR_PRESETS = [
 ];
 
 const COST_PRESETS = [
-  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, desc: "~2 rollouts/behavior, quick smoke test" },
-  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, desc: "~10 rollouts, balanced" },
-  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, desc: "~20 rollouts, thorough" },
+  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, maxDiversityRetries: 0, minCosineDistance: 0.2, desc: "~2 rollouts, 1 diversity attempt, quick" },
+  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, maxDiversityRetries: 2, minCosineDistance: 0.3, desc: "~10 rollouts, 3 diversity attempts, balanced" },
+  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, maxDiversityRetries: 3, minCosineDistance: 0.35, desc: "~20 rollouts, 4 diversity attempts, thorough" },
 ];
 
 const CONCERN_PRESETS = [
@@ -56,6 +56,8 @@ export default function EvalForm({ onSubmit, loading }: Props) {
   const [numRollouts, setNumRollouts]     = useState(2);
   const [maxTurns, setMaxTurns]           = useState(3);
   const [maxConcurrency, setMaxConcurrency] = useState(3);
+  const [maxDiversityRetries, setMaxDiversityRetries] = useState(0);
+  const [minCosineDistance, setMinCosineDistance] = useState(0.2);
 
   function applyEvalPreset(id: string) {
     const p = EVALUATOR_PRESETS.find(x => x.id === id);
@@ -69,6 +71,8 @@ export default function EvalForm({ onSubmit, loading }: Props) {
     setCostPreset(id);
     setNumRollouts(p.rollouts);
     setMaxTurns(p.maxTurns);
+    setMaxDiversityRetries(p.maxDiversityRetries);
+    setMinCosineDistance(p.minCosineDistance);
   }
 
   function handleProviderChange(id: string) {
@@ -92,6 +96,8 @@ export default function EvalForm({ onSubmit, loading }: Props) {
       num_rollouts: numRollouts,
       max_turns: maxTurns,
       max_concurrency: maxConcurrency,
+      max_diversity_retries: maxDiversityRetries,
+      min_cosine_distance: minCosineDistance,
     });
   }
 
