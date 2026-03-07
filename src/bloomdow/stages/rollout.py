@@ -157,7 +157,17 @@ async def _run_single_rollout(
                 break
 
             if next_content:
-                role = Role.TOOL if next_msg_data.get("role") == "tool" else Role.USER
+                raw_role = next_msg_data.get("role", "user")
+                role = Role.TOOL if raw_role == "tool" else Role.USER
+                # Evaluator may return role "tool" for simenv, but target API requires
+                # tool_call_id for tool messages (must match a prior assistant tool_call).
+                # We never pass tools to the target, so convert tool→user to avoid
+                # "missing field tool_call_id" errors from DeepSeek/OpenAI.
+                if raw_role == "tool":
+                    tool_name = next_msg_data.get("name", "tool")
+                    api_content = f"[Tool result from {tool_name}]: {next_content}"
+                else:
+                    api_content = next_content
                 transcript.messages.append(
                     Message(
                         role=role,
@@ -165,7 +175,7 @@ async def _run_single_rollout(
                         name=next_msg_data.get("name"),
                     )
                 )
-                target_messages.append({"role": role.value, "content": next_content})
+                target_messages.append({"role": "user", "content": api_content})
 
         return transcript
 

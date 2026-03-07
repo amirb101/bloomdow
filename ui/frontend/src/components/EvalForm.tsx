@@ -6,6 +6,7 @@ import type { StartEvalRequest } from "../lib/api";
 const PROVIDERS = [
   { id: "anthropic", label: "Anthropic", models: ["anthropic/claude-opus-4-20250514", "anthropic/claude-sonnet-4-20250514"], keyHint: "sk-ant-..." },
   { id: "openai",    label: "OpenAI",    models: ["openai/gpt-4o", "openai/gpt-4-turbo", "openai/o1"], keyHint: "sk-..." },
+  { id: "xai",       label: "xAI (Grok)", models: ["xai/grok-4-1-fast-non-reasoning", "xai/grok-4-1-fast-reasoning", "xai/grok-3-mini", "xai/grok-3"], keyHint: "xai-... (from console.x.ai)" },
   { id: "deepseek",  label: "DeepSeek",  models: ["deepseek/deepseek-chat", "deepseek/deepseek-coder", "deepseek/deepseek-reasoner"], keyHint: "sk-... (from platform.deepseek.com)" },
   { id: "bedrock",   label: "AWS Bedrock", models: ["bedrock/anthropic.claude-sonnet-4-20250514-v1:0", "bedrock/anthropic.claude-opus-4-20250514-v1:0"], keyHint: "Bearer token" },
   { id: "huggingface", label: "HuggingFace", models: ["huggingface/meta-llama/Llama-3.3-70B-Instruct", "huggingface/mistralai/Mistral-7B-Instruct-v0.2", "huggingface/together/deepseek-ai/DeepSeek-R1"], keyHint: "hf_... (from huggingface.co/settings/tokens)" },
@@ -13,6 +14,7 @@ const PROVIDERS = [
 ];
 
 const EVALUATOR_PRESETS = [
+  { id: "grok-fast", label: "Grok 4.1 Fast", model: "xai/grok-4-1-fast-non-reasoning", keyHint: "xAI API key" },
   { id: "deepseek", label: "DeepSeek (cheap)", model: "deepseek/deepseek-chat", keyHint: "DeepSeek API key" },
   { id: "gpt4o-mini", label: "GPT-4o-mini (cheap)", model: "openai/gpt-4o-mini", keyHint: "OpenAI API key" },
   { id: "claude-haiku", label: "Claude Haiku", model: "anthropic/claude-3-5-haiku-20241022", keyHint: "Anthropic API key" },
