@@ -8,6 +8,7 @@ import os
 import sys
 
 import click
+import litellm
 from rich.console import Console
 from rich.logging import RichHandler
 from rich.panel import Panel
@@ -169,7 +170,7 @@ def main():
 )
 @click.option(
     "--min-cosine-distance",
-    default=0.3,
+    default=0.1,
     show_default=True,
     type=float,
     help="Minimum pairwise cosine distance between understanding embeddings.",
@@ -183,9 +184,24 @@ def main():
 )
 @click.option(
     "--embedding-model",
-    default="text-embedding-3-small",
+    default="text-embedding-3-large",
     show_default=True,
     help="LiteLLM embedding model for diversity check.",
+)
+@click.option(
+    "--embedding-api-key",
+    envvar="EMBEDDING_API_KEY",
+    default=None,
+    help=(
+        "API key for the embedding model. Auto-detects OPENAI_API_KEY when using "
+        "OpenAI embedding models. Also reads EMBEDDING_API_KEY env var."
+    ),
+)
+@click.option(
+    "--embedding-api-base",
+    envvar="EMBEDDING_API_BASE",
+    default=None,
+    help="Base URL for the embedding model API. Also reads EMBEDDING_API_BASE env var.",
 )
 @click.option(
     "--max-turns", "-t",
@@ -229,6 +245,8 @@ def run(
     min_cosine_distance: float,
     genrm_threshold: float,
     embedding_model: str,
+    embedding_api_key: str | None,
+    embedding_api_base: str | None,
     max_turns: int,
     max_concurrency: int,
     output_dir: str,
@@ -244,8 +262,16 @@ def run(
         evaluator=evaluator,
         evaluator_api_key=evaluator_api_key,
         evaluator_api_base=evaluator_api_base,
+        anthropic_api_key=anthropic_api_key,
         num_rollouts=num_rollouts,
-        diversity=diversity,
+        num_diverse_understandings=num_diverse_understandings,
+        seed_scenarios=seed_scenarios,
+        target_scenarios=target_scenarios,
+        min_cosine_distance=min_cosine_distance,
+        genrm_threshold=genrm_threshold,
+        embedding_model=embedding_model,
+        embedding_api_key=embedding_api_key,
+        embedding_api_base=embedding_api_base,
         max_turns=max_turns,
         max_concurrency=max_concurrency,
         output_dir=output_dir,
@@ -424,7 +450,12 @@ def _gather_configuration() -> dict | None:
     console.print()
 
     num_rollouts = 20
-    diversity = 0.5
+    num_diverse_understandings = 5
+    seed_scenarios = 10
+    target_scenarios = 100
+    min_cosine_distance = 0.1
+    genrm_threshold = 7.0
+    embedding_model = "text-embedding-3-large"
     max_turns = 5
     max_concurrency = 3
     output_dir = "bloomdow-results"
@@ -432,8 +463,9 @@ def _gather_configuration() -> dict | None:
     if Confirm.ask("  Customize advanced settings? (defaults are usually fine)", default=False):
         console.print()
         num_rollouts = IntPrompt.ask("    Rollouts per behavior", default=20)
-        diversity_str = Prompt.ask("    Scenario diversity (0.0–1.0)", default="0.5")
-        diversity = max(0.0, min(1.0, float(diversity_str)))
+        num_diverse_understandings = IntPrompt.ask("    Diverse understandings per behavior", default=5)
+        seed_scenarios = IntPrompt.ask("    Seed scenarios per understanding", default=10)
+        target_scenarios = IntPrompt.ask("    Target scenarios per understanding", default=100)
         max_turns = IntPrompt.ask("    Max conversational turns per rollout", default=5)
         max_concurrency = IntPrompt.ask("    Max concurrent rollouts", default=3)
         output_dir = Prompt.ask("    Output directory", default="bloomdow-results")
@@ -455,7 +487,9 @@ def _gather_configuration() -> dict | None:
     summary_table.add_row("API key", api_key[:8] + "..." + api_key[-4:] if api_key else "—")
     summary_table.add_row("Concern", concern[:80] + ("..." if len(concern) > 80 else ""))
     summary_table.add_row("Rollouts/behavior", str(num_rollouts))
-    summary_table.add_row("Diversity", str(diversity))
+    summary_table.add_row("Diverse understandings", str(num_diverse_understandings))
+    summary_table.add_row("Seed scenarios/understanding", str(seed_scenarios))
+    summary_table.add_row("Target scenarios/understanding", str(target_scenarios))
     summary_table.add_row("Max turns", str(max_turns))
     summary_table.add_row("Max concurrency", str(max_concurrency))
     summary_table.add_row("Output directory", output_dir)
@@ -477,7 +511,12 @@ def _gather_configuration() -> dict | None:
         evaluator_api_key=evaluator_api_key if not use_same else None,
         evaluator_api_base=None,
         num_rollouts=num_rollouts,
-        diversity=diversity,
+        num_diverse_understandings=num_diverse_understandings,
+        seed_scenarios=seed_scenarios,
+        target_scenarios=target_scenarios,
+        min_cosine_distance=min_cosine_distance,
+        genrm_threshold=genrm_threshold,
+        embedding_model=embedding_model,
         max_turns=max_turns,
         max_concurrency=max_concurrency,
         output_dir=output_dir,
@@ -497,20 +536,25 @@ def _run_pipeline(
     evaluator: str | None,
     evaluator_api_key: str | None,
     evaluator_api_base: str | None,
-    num_rollouts: int,
-    diversity: float,
-    max_turns: int,
-    max_concurrency: int,
-    output_dir: str,
-    verbose: bool,
+    anthropic_api_key: bool = False,
+    num_rollouts: int = 20,
+    num_diverse_understandings: int = 5,
+    seed_scenarios: int = 10,
+    target_scenarios: int = 100,
+    min_cosine_distance: float = 0.1,
+    genrm_threshold: float = 7.0,
+    embedding_model: str = "text-embedding-3-large",
+    embedding_api_key: str | None = None,
+    embedding_api_base: str | None = None,
+    max_turns: int = 5,
+    max_concurrency: int = 3,
+    output_dir: str = "bloomdow-results",
+    verbose: bool = False,
 ) -> None:
     """Create a BloomdowPipeline and run it."""
     from bloomdow.pipeline import BloomdowPipeline
 
-    embedding_api_key: str | None = None
-    embedding_api_base: str | None = None
     if anthropic_api_key:
-        import os
         key = os.environ.get("ANTHROPIC_API_KEY")
         if not key:
             console.print("[bold red]Error:[/bold red] --anthropic-api-key flag requires ANTHROPIC_API_KEY env var to be set.")
@@ -521,6 +565,25 @@ def _run_pipeline(
         embedding_model = ANTHROPIC_EMBEDDING_MODEL
         embedding_api_key = "no-key"
         embedding_api_base = ANTHROPIC_EMBEDDING_API_BASE
+
+    if not embedding_api_key:
+        is_openai_embedding = (
+            embedding_model.startswith("text-embedding-")
+            or embedding_model.startswith("openai/")
+        )
+        if is_openai_embedding:
+            embedding_api_key = os.environ.get("OPENAI_API_KEY")
+            if embedding_api_key:
+                console.print(
+                    f"  [dim]Auto-detected OPENAI_API_KEY for embedding model"
+                    f" [cyan]{embedding_model}[/cyan][/dim]"
+                )
+            else:
+                console.print(
+                    f"[bold yellow]Warning:[/bold yellow] Embedding model [cyan]{embedding_model}[/cyan] "
+                    f"looks like an OpenAI model but OPENAI_API_KEY is not set.\n"
+                    f"  Set it, pass --embedding-api-key, or use a different --embedding-model."
+                )
 
     pipeline = BloomdowPipeline(
         target_model=model,
@@ -571,8 +634,9 @@ def _setup_logging(verbose: bool) -> None:
         format="%(message)s",
         handlers=[RichHandler(console=console, rich_tracebacks=True, show_path=False)],
     )
-    logging.getLogger("litellm").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    for noisy in ("litellm", "LiteLLM", "LiteLLM Router", "LiteLLM Proxy", "httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+    litellm.suppress_debug_info = True
 
 
 if __name__ == "__main__":

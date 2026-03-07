@@ -24,7 +24,7 @@ class PipelineConfig(BaseModel):
     seed_scenarios_per_understanding: int = Field(default=10, ge=1)
     target_scenarios_per_understanding: int = Field(default=100, ge=1)
     min_cosine_distance: float = Field(
-        default=0.3,
+        default=0.1,
         ge=0.0,
         le=2.0,
         description="Minimum pairwise cosine distance between understanding embeddings",
@@ -36,7 +36,7 @@ class PipelineConfig(BaseModel):
         description="Minimum quality score (1-10) for augmented scenarios to pass validation",
     )
     embedding_model: str = Field(
-        default="text-embedding-3-small",
+        default="text-embedding-3-large",
         description="LiteLLM-compatible embedding model ID",
     )
     embedding_api_key: str | None = Field(

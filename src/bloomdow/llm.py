@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import random
 from typing import Any, TypeVar
 
 import litellm
@@ -16,8 +17,15 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=BaseModel)
 
-_DEFAULT_MAX_RETRIES = 3
-_DEFAULT_TIMEOUT = 300
+_DEFAULT_MAX_RETRIES = 6
+_DEFAULT_TIMEOUT = 600
+_BACKOFF_BASE = 2
+_BACKOFF_MAX = 60
+
+
+def _backoff(attempt: int) -> float:
+    """Exponential backoff with full jitter, capped at _BACKOFF_MAX seconds."""
+    return random.uniform(0, min(_BACKOFF_MAX, _BACKOFF_BASE ** (attempt + 1)))
 
 
 def _is_bedrock(model: str) -> bool:
@@ -75,9 +83,9 @@ async def complete(
         except Exception as exc:
             last_err = exc
             if attempt < max_retries:
-                wait = 2 ** attempt
+                wait = _backoff(attempt)
                 logger.warning(
-                    "LLM call failed (attempt %d/%d, retrying in %ds): %s",
+                    "LLM call failed (attempt %d/%d, retrying in %.1fs): %s",
                     attempt + 1, max_retries + 1, wait, exc,
                 )
                 await asyncio.sleep(wait)
@@ -137,11 +145,11 @@ async def complete_json(
             )
         except Exception as exc:
             last_err = exc
-            wait = 2 ** attempt if attempt < max_retries else 0
+            wait = _backoff(attempt) if attempt < max_retries else 0
             logger.warning(
                 "LLM call failed (attempt %d/%d): %s%s",
                 attempt + 1, max_retries + 1, exc,
-                f" — retrying in {wait}s" if wait else "",
+                f" — retrying in {wait:.1f}s" if wait else "",
             )
             if wait:
                 await asyncio.sleep(wait)
@@ -205,11 +213,11 @@ async def complete_structured(
             )
         except Exception as exc:
             last_err = exc
-            wait = 2 ** attempt if attempt < max_retries else 0
+            wait = _backoff(attempt) if attempt < max_retries else 0
             logger.warning(
                 "LLM call failed (attempt %d/%d): %s%s",
                 attempt + 1, max_retries + 1, exc,
-                f" — retrying in {wait}s" if wait else "",
+                f" — retrying in {wait:.1f}s" if wait else "",
             )
             if wait:
                 await asyncio.sleep(wait)
