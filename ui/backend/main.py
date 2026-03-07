@@ -64,6 +64,7 @@ class StartEvalRequest(BaseModel):
     evaluator_model: str = "anthropic/claude-sonnet-4-20250514"
     evaluator_api_key: str | None = None
     evaluator_api_base: str | None = None
+    embedding_api_key: str | None = None
     num_rollouts: int = 20
     max_turns: int = 5
     max_concurrency: int = 3
@@ -88,8 +89,8 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
         from bloomdow.stages.scoping import run_scoping
         from bloomdow.stages.understanding import run_understanding
 
-        # Embeddings use text-embedding-3-small (OpenAI) by default — needs OPENAI_API_KEY
-        embedding_api_key = (os.environ.get("OPENAI_API_KEY") or "").strip() or None
+        # Embeddings use text-embedding-3-small (OpenAI) — from request or .env
+        embedding_key = (req.embedding_api_key or "").strip() or (os.environ.get("OPENAI_API_KEY") or "").strip() or None
 
         # Strip keys in case of copy-paste whitespace/newlines
         target_key = (req.target_api_key or "").strip() or None
@@ -106,7 +107,7 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
             num_rollouts=req.num_rollouts,
             max_turns=req.max_turns,
             max_concurrency=req.max_concurrency,
-            embedding_api_key=embedding_api_key,
+            embedding_api_key=embedding_key,
         )
 
         # Stage 1

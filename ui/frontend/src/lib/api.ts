@@ -8,6 +8,7 @@ export interface StartEvalRequest {
   evaluator_model?: string;
   evaluator_api_key?: string;
   evaluator_api_base?: string;
+  embedding_api_key?: string;
   num_rollouts?: number;
   max_turns?: number;
   max_concurrency?: number;

@@ -111,13 +111,22 @@ Open `http://localhost:5173` in your browser.
 
 To stop both servers: `Ctrl-C`.
 
+**Windows** (from `bloomdow\ui\`):
+
+```powershell
+.\start.ps1
+```
+
+Or double-click `start.bat`. The script checks Python 3.11+, Node.js 18+, npm; creates the venv and installs deps if missing.
+
 ### Running them separately (if needed)
 
 **Backend only:**
 ```bash
 cd bloomdow/ui/backend
-../. venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+../.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
+(Windows: `..\.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload`)
 
 **Frontend only:**
 ```bash

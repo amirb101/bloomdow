@@ -50,6 +50,7 @@ export default function EvalForm({ onSubmit, loading }: Props) {
   const [evalPreset, setEvalPreset]       = useState("deepseek");
   const [evalModel, setEvalModel]         = useState("deepseek/deepseek-chat");
   const [evalApiKey, setEvalApiKey]       = useState("");
+  const [openaiKey, setOpenaiKey]        = useState("");
   const [showAdvanced, setShowAdvanced]   = useState(false);
   const [costPreset, setCostPreset]       = useState<"low" | "medium" | "high">("low");
   const [numRollouts, setNumRollouts]     = useState(2);
@@ -87,6 +88,7 @@ export default function EvalForm({ onSubmit, loading }: Props) {
       target_api_base: apiBase || undefined,
       evaluator_model: evalModel,
       evaluator_api_key: useSavedKeys ? undefined : (evalApiKey || undefined),
+      embedding_api_key: useSavedKeys ? undefined : (openaiKey || undefined),
       num_rollouts: numRollouts,
       max_turns: maxTurns,
       max_concurrency: maxConcurrency,
@@ -121,13 +123,22 @@ export default function EvalForm({ onSubmit, loading }: Props) {
         </p>
       </div>
 
-      {/* OpenAI key required for embeddings */}
-      <div className="flex gap-2 p-3 rounded-lg bg-sky-500/5 border border-sky-500/20 text-sm text-sky-300">
-        <span className="font-semibold shrink-0">Required:</span>
-        <span>
-          <code className="bg-[var(--bg-hover)] px-1 rounded">OPENAI_API_KEY</code> in <code className="bg-[var(--bg-hover)] px-1 rounded">.env</code> — Stage 2 uses OpenAI embeddings for diversity checks. Very cheap (~$0.001/run). Get one at{" "}
-          <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline hover:text-sky-200">platform.openai.com/api-keys</a>.
-        </span>
+      {/* OpenAI key for embeddings — paste here or set in .env */}
+      <div className="space-y-2">
+        <label className="block text-xs font-semibold uppercase tracking-widest text-[var(--text-secondary)]">
+          OpenAI key <span className="text-[var(--text-muted)] normal-case">(required for Stage 2 embeddings, ~$0.001/run)</span>
+        </label>
+        {useSavedKeys ? (
+          <p className="text-xs text-[var(--text-muted)]">Using <code className="bg-[var(--bg-hover)] px-1 rounded">OPENAI_API_KEY</code> from .env</p>
+        ) : (
+          <input
+            type="password"
+            value={openaiKey}
+            onChange={e => setOpenaiKey(e.target.value)}
+            placeholder="sk-... (from platform.openai.com/api-keys)"
+            className="input-field w-full"
+          />
+        )}
       </div>
 
       {/* Target Model — Step 1: Provider */}
