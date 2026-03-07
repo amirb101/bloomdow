@@ -34,8 +34,9 @@ from db import fail_evaluation, get_evaluation, init_db, insert_evaluation, comp
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 
-# in-memory progress queues keyed by run_id
-_progress_queues: dict[str, asyncio.Queue] = {}
+# in-memory progress: history + condition for broadcast to multiple/reconnecting clients
+_progress_history: dict[str, list[dict | None]] = {}
+_progress_conditions: dict[str, asyncio.Condition] = {}
 
 
 @asynccontextmanager
@@ -79,10 +80,14 @@ class StartEvalRequest(BaseModel):
 
 async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
     """Run the bloomdow pipeline in the background, emitting SSE events."""
-    queue = _progress_queues[run_id]
+    history = _progress_history[run_id]
+    cond = _progress_conditions[run_id]
 
     async def emit(event: str, data: Any) -> None:
-        await queue.put({"event": event, "data": data})
+        item = {"event": event, "data": data}
+        history.append(item)
+        async with cond:
+            cond.notify_all()
 
     try:
         from bloomdow.config import PipelineConfig
@@ -170,7 +175,11 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
         fail_evaluation(run_id, error_msg)
         await emit("error", {"message": error_msg})
     finally:
-        await queue.put(None)  # sentinel
+        history.append(None)  # sentinel
+        async with cond:
+            cond.notify_all()
+        _progress_history.pop(run_id, None)
+        _progress_conditions.pop(run_id, None)
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -187,8 +196,8 @@ async def start_evaluation(req: StartEvalRequest) -> dict:
 
     insert_evaluation(run_id, created_at, req.target_model, req.concern, config_snapshot)
 
-    queue: asyncio.Queue = asyncio.Queue()
-    _progress_queues[run_id] = queue
+    _progress_history[run_id] = []
+    _progress_conditions[run_id] = asyncio.Condition()
 
     asyncio.create_task(_run_pipeline(run_id, req))
 
@@ -197,8 +206,8 @@ async def start_evaluation(req: StartEvalRequest) -> dict:
 
 @app.get("/api/evaluations/{run_id}/stream")
 async def stream_progress(run_id: str):
-    """SSE stream for a running evaluation."""
-    if run_id not in _progress_queues:
+    """SSE stream for a running evaluation. Reconnecting clients get full history + live updates."""
+    if run_id not in _progress_history:
         # Already completed — check DB
         record = get_evaluation(run_id)
         if record is None:
@@ -212,15 +221,22 @@ async def stream_progress(run_id: str):
 
         return EventSourceResponse(already_done())
 
-    queue = _progress_queues[run_id]
+    history = _progress_history[run_id]
+    cond = _progress_conditions[run_id]
 
     async def generator() -> AsyncGenerator:
+        index = 0
         while True:
-            item = await queue.get()
-            if item is None:
-                break
-            yield {"event": item["event"], "data": json.dumps(item["data"])}
-        _progress_queues.pop(run_id, None)
+            # Send any new items
+            while index < len(history):
+                item = history[index]
+                index += 1
+                if item is None:
+                    return
+                yield {"event": item["event"], "data": json.dumps(item["data"])}
+            # Wait for more
+            async with cond:
+                await cond.wait()
 
     return EventSourceResponse(generator())
 

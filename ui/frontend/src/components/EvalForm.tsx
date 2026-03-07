@@ -21,10 +21,10 @@ const EVALUATOR_PRESETS = [
 ];
 
 const COST_PRESETS = [
-  { id: "demo",   label: "Demo",   rollouts: 1,  maxTurns: 1, maxDiversityRetries: 0, minCosineDistance: 0.05, seedScenarios: 2,  targetScenarios: 5,   numDiverseUnderstandings: 2, desc: "~2 min, 1 rollout, UI smoke test" },
-  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, maxDiversityRetries: 0, minCosineDistance: 0.1,  seedScenarios: 3,  targetScenarios: 10,  numDiverseUnderstandings: 3, desc: "~2 rollouts, quick" },
-  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, maxDiversityRetries: 2, minCosineDistance: 0.15, seedScenarios: 5,  targetScenarios: 50,  numDiverseUnderstandings: 5, desc: "~10 rollouts, balanced" },
-  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, maxDiversityRetries: 3, minCosineDistance: 0.2,  seedScenarios: 10, targetScenarios: 100, numDiverseUnderstandings: 5, desc: "~20 rollouts, thorough" },
+  { id: "demo",   label: "Demo",   rollouts: 1,  maxTurns: 1, maxDiversityRetries: 0, minCosineDistance: 0.05, seedScenarios: 2,  targetScenarios: 5,   numDiverseUnderstandings: 1, maxConcurrency: 8, desc: "~1 min, 1 understanding/behavior, UI smoke test" },
+  { id: "low",    label: "Low",    rollouts: 2,  maxTurns: 3, maxDiversityRetries: 0, minCosineDistance: 0.1,  seedScenarios: 3,  targetScenarios: 10,  numDiverseUnderstandings: 3, maxConcurrency: 5, desc: "~2 rollouts, quick" },
+  { id: "medium", label: "Medium", rollouts: 10, maxTurns: 5, maxDiversityRetries: 2, minCosineDistance: 0.15, seedScenarios: 5,  targetScenarios: 50,  numDiverseUnderstandings: 5, maxConcurrency: 5, desc: "~10 rollouts, balanced" },
+  { id: "high",   label: "High",   rollouts: 20, maxTurns: 5, maxDiversityRetries: 3, minCosineDistance: 0.2,  seedScenarios: 10, targetScenarios: 100, numDiverseUnderstandings: 5, maxConcurrency: 5, desc: "~20 rollouts, thorough" },
 ];
 
 const CONCERN_PRESETS = [
@@ -57,12 +57,12 @@ export default function EvalForm({ onSubmit, loading }: Props) {
   const [costPreset, setCostPreset]       = useState<"demo" | "low" | "medium" | "high">("demo");
   const [numRollouts, setNumRollouts]     = useState(1);
   const [maxTurns, setMaxTurns]           = useState(1);
-  const [maxConcurrency, setMaxConcurrency] = useState(3);
+  const [maxConcurrency, setMaxConcurrency] = useState(8);
   const [maxDiversityRetries, setMaxDiversityRetries] = useState(0);
   const [minCosineDistance, setMinCosineDistance] = useState(0.05);
   const [seedScenariosPerUnderstanding, setSeedScenariosPerUnderstanding] = useState(2);
   const [targetScenariosPerUnderstanding, setTargetScenariosPerUnderstanding] = useState(5);
-  const [numDiverseUnderstandings, setNumDiverseUnderstandings] = useState(2);
+  const [numDiverseUnderstandings, setNumDiverseUnderstandings] = useState(1);
 
   function applyEvalPreset(id: string) {
     const p = EVALUATOR_PRESETS.find(x => x.id === id);
@@ -81,6 +81,7 @@ export default function EvalForm({ onSubmit, loading }: Props) {
     setSeedScenariosPerUnderstanding(p.seedScenarios);
     setTargetScenariosPerUnderstanding(p.targetScenarios);
     setNumDiverseUnderstandings(p.numDiverseUnderstandings);
+    setMaxConcurrency(p.maxConcurrency ?? 3);
   }
 
   function handleProviderChange(id: string) {
