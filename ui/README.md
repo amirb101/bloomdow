@@ -79,14 +79,12 @@ Run this once from the `bloomdow/` root:
 
 ```bash
 python3 -m venv ui/.venv
-ui/.venv/bin/pip install -e . fastapi "uvicorn[standard]" sse-starlette aiosqlite
+ui/.venv/bin/pip install -e . -r ui/backend/requirements.txt
 ```
 
-This installs:
-- `bloomdow` itself (editable, so pipeline changes from teammates are picked up automatically)
-- `fastapi` + `uvicorn` — the web server
-- `sse-starlette` — Server-Sent Events support
-- `aiosqlite` — async SQLite (used internally by FastAPI lifespan)
+This installs bloomdow (editable) plus backend deps: fastapi, uvicorn, sse-starlette, aiosqlite, python-dotenv, numpy.
+
+**After pulling** (when bloomdow adds new deps): `ui/.venv/bin/pip install -e .`
 
 ### 3. Install frontend deps
 
