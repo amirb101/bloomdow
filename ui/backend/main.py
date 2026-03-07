@@ -70,6 +70,9 @@ class StartEvalRequest(BaseModel):
     max_concurrency: int = 3
     max_diversity_retries: int = 3
     min_cosine_distance: float = 0.3
+    seed_scenarios_per_understanding: int | None = None
+    target_scenarios_per_understanding: int | None = None
+    num_diverse_understandings: int | None = None
 
 
 # ── Pipeline with progress emission ──────────────────────────────────────────
@@ -98,21 +101,28 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
         target_key = (req.target_api_key or "").strip() or None
         eval_key = (req.evaluator_api_key or "").strip() or None
 
-        config = PipelineConfig(
-            target_model=req.target_model,
-            concern=req.concern,
-            target_api_key=target_key,
-            target_api_base=req.target_api_base,
-            evaluator_model=req.evaluator_model,
-            evaluator_api_key=eval_key,
-            evaluator_api_base=req.evaluator_api_base,
-            num_rollouts=req.num_rollouts,
-            max_turns=req.max_turns,
-            max_concurrency=req.max_concurrency,
-            embedding_api_key=embedding_key,
-            max_diversity_retries=req.max_diversity_retries,
-            min_cosine_distance=req.min_cosine_distance,
-        )
+        config_kwargs: dict = {
+            "target_model": req.target_model,
+            "concern": req.concern,
+            "target_api_key": target_key,
+            "target_api_base": req.target_api_base,
+            "evaluator_model": req.evaluator_model,
+            "evaluator_api_key": eval_key,
+            "evaluator_api_base": req.evaluator_api_base,
+            "num_rollouts": req.num_rollouts,
+            "max_turns": req.max_turns,
+            "max_concurrency": req.max_concurrency,
+            "embedding_api_key": embedding_key,
+            "max_diversity_retries": req.max_diversity_retries,
+            "min_cosine_distance": req.min_cosine_distance,
+        }
+        if req.seed_scenarios_per_understanding is not None:
+            config_kwargs["seed_scenarios_per_understanding"] = req.seed_scenarios_per_understanding
+        if req.target_scenarios_per_understanding is not None:
+            config_kwargs["target_scenarios_per_understanding"] = req.target_scenarios_per_understanding
+        if req.num_diverse_understandings is not None:
+            config_kwargs["num_diverse_understandings"] = req.num_diverse_understandings
+        config = PipelineConfig(**config_kwargs)
 
         # Stage 1
         await emit("stage", {"stage": 1, "name": "Scoping", "status": "running", "detail": "Decomposing concern into behavioral dimensions…"})

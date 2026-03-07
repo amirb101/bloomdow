@@ -14,6 +14,9 @@ export interface StartEvalRequest {
   max_concurrency?: number;
   max_diversity_retries?: number;
   min_cosine_distance?: number;
+  seed_scenarios_per_understanding?: number;
+  target_scenarios_per_understanding?: number;
+  num_diverse_understandings?: number;
 }
 
 export interface EvalListItem {
