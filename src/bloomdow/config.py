@@ -50,5 +50,9 @@ class PipelineConfig(BaseModel):
     max_diversity_retries: int = Field(default=3, ge=0)
     max_turns: int = Field(default=5, ge=1)
     max_concurrency: int = Field(default=3, ge=1)
-    judge_samples: int = Field(default=1, ge=1)
+    judge_samples: int = Field(
+        default=1,
+        ge=1,
+        description="Number of independent judge samples per transcript. >1 enables variance estimation.",
+    )
     output_dir: str = "bloomdow-results"

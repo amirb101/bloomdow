@@ -253,18 +253,31 @@ async def _validate_scenarios(
     config: PipelineConfig,
     semaphore: asyncio.Semaphore,
 ) -> list[Scenario]:
-    """Run genRM on all scenarios in batches; return only passing scenarios."""
+    """Run genRM on all scenarios in batches; return passing scenarios with scores attached."""
     if not scenarios:
         return []
-    passed_ids: set[str] = set()
+    score_map: dict[str, ValidationResult] = {}
     for i in range(0, len(scenarios), _GENRM_BATCH_SIZE):
         batch = scenarios[i : i + _GENRM_BATCH_SIZE]
         async with semaphore:
             results = await _validate_batch(batch, behavior, config)
         for vr in results:
-            if vr.passed:
-                passed_ids.add(vr.scenario_id)
-    return [s for s in scenarios if s.id in passed_ids]
+            score_map[vr.scenario_id] = vr
+
+    passing: list[Scenario] = []
+    for s in scenarios:
+        vr = score_map.get(s.id)
+        if vr is not None:
+            # Attach genRM scores regardless of pass/fail for downstream analysis
+            s = s.model_copy(update={
+                "genrm_quality": vr.quality_score,
+                "genrm_relevance": vr.relevance_score,
+                "genrm_validity": vr.validity_score,
+                "genrm_overall": vr.overall_score,
+            })
+        if vr is not None and vr.passed:
+            passing.append(s)
+    return passing
 
 
 async def _process_one_understanding(
@@ -308,45 +321,41 @@ async def run_ideation(
         normalize_behavior_name(k): v for k, v in all_understandings.items()
     }
 
-    for behavior in behaviors:
+    async def _ideate_one_behavior(behavior: BehaviorDimension) -> tuple[str, list[Scenario]]:
         norm_key = normalize_behavior_name(behavior.name)
         understandings = norm_understandings.get(norm_key)
         if not understandings:
             logger.warning("No understandings for %s, skipping ideation", behavior.name)
-            result[behavior.name] = []
-            continue
+            return behavior.name, []
 
-        tasks = [
+        per_understanding_tasks = [
             _process_one_understanding(understanding, behavior, config, semaphore)
             for understanding in understandings
         ]
-        lists_per_understanding = await asyncio.gather(*tasks, return_exceptions=True)
+        lists_per_understanding = await asyncio.gather(*per_understanding_tasks, return_exceptions=True)
 
         combined: list[Scenario] = []
         for i, outcome in enumerate(lists_per_understanding):
             if isinstance(outcome, Exception):
-                logger.warning(
-                    "Ideation failed for %s (understanding %d): %s",
-                    behavior.name,
-                    i,
-                    outcome,
-                )
+                logger.warning("Ideation failed for %s (understanding %d): %s", behavior.name, i, outcome)
                 continue
             combined.extend(outcome)
 
         if config.num_rollouts > 0 and len(combined) > config.num_rollouts:
             combined = combined[: config.num_rollouts]
-            logger.info(
-                "Subsampled %s to %d scenarios (num_rollouts cap)",
-                behavior.name,
-                config.num_rollouts,
-            )
+            logger.info("Subsampled %s to %d scenarios (num_rollouts cap)", behavior.name, config.num_rollouts)
 
-        result[behavior.name] = combined
-        logger.info(
-            "Ideation for %s: %d total validated scenarios",
-            behavior.name,
-            len(combined),
-        )
+        logger.info("Ideation for %s: %d total validated scenarios", behavior.name, len(combined))
+        return behavior.name, combined
+
+    # All behaviors run concurrently; per-understanding tasks within each are also concurrent
+    behavior_tasks = [_ideate_one_behavior(behavior) for behavior in behaviors]
+    outcomes = await asyncio.gather(*behavior_tasks, return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, Exception):
+            logger.warning("Ideation behavior task failed: %s", outcome)
+            continue
+        behavior_name, combined = outcome
+        result[behavior_name] = combined
 
     return result

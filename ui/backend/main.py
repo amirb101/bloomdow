@@ -74,6 +74,7 @@ class StartEvalRequest(BaseModel):
     seed_scenarios_per_understanding: int | None = None
     target_scenarios_per_understanding: int | None = None
     num_diverse_understandings: int | None = None
+    judge_samples: int = 1
 
 
 # ── Pipeline with progress emission ──────────────────────────────────────────
@@ -127,6 +128,7 @@ async def _run_pipeline(run_id: str, req: StartEvalRequest) -> None:
             config_kwargs["target_scenarios_per_understanding"] = req.target_scenarios_per_understanding
         if req.num_diverse_understandings is not None:
             config_kwargs["num_diverse_understandings"] = req.num_diverse_understandings
+        config_kwargs["judge_samples"] = req.judge_samples
         config = PipelineConfig(**config_kwargs)
 
         # Stage 1

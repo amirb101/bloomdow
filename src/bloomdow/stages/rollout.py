@@ -40,6 +40,7 @@ async def _run_single_rollout(
             behavior_name=scenario.behavior_name,
             target_model=config.target_model,
             evaluator_model=config.evaluator_model,
+            scenario_genrm_overall=scenario.genrm_overall,
         )
 
         # The target sees its system prompt from the scenario

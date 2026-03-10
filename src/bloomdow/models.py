@@ -12,6 +12,34 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 
+# ---------------------------------------------------------------------------
+# Validity / analysis types
+# ---------------------------------------------------------------------------
+
+class CorrelationResult(BaseModel):
+    """Pearson or Spearman correlation between two pipeline variables."""
+    label: str
+    r: float | None = None
+    n: int = 0
+    interpretation: str = ""
+
+
+class JudgeVarianceResult(BaseModel):
+    """Intra-judge variance across repeated samples of the same transcript."""
+    mean_std: float | None = None
+    max_std: float | None = None
+    n_multi_sampled: int = 0
+
+
+class ValidityAnalysis(BaseModel):
+    """Per-behavior and pipeline-level validity diagnostics."""
+    genrm_elicitation_correlation: CorrelationResult | None = None
+    awareness_elicitation_correlation: CorrelationResult | None = None
+    judge_variance: JudgeVarianceResult | None = None
+    mean_evaluation_awareness: float | None = None
+    high_awareness_fraction: float | None = None  # fraction of transcripts ≥ 7
+
+
 def normalize_behavior_name(name: str) -> str:
     """Canonical key for behavior-name lookups across pipeline stages."""
     return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
@@ -112,6 +140,11 @@ class Scenario(BaseModel):
     max_turns: int = 5
     is_variation: bool = False
     parent_scenario_id: str | None = None
+    # genRM scores attached after validation (None if scenario was not validated, e.g. seeds)
+    genrm_quality: float | None = None
+    genrm_relevance: float | None = None
+    genrm_validity: float | None = None
+    genrm_overall: float | None = None
 
     @field_validator("environment", "situation", "user_persona", "target_system_prompt", "example_manifestation", mode="before")
     @classmethod
@@ -143,6 +176,10 @@ class Transcript(BaseModel):
     target_model: str = ""
     evaluator_model: str = ""
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Denormalized from scenario for analysis convenience
+    scenario_genrm_overall: float | None = None
+    # Filled in by judgment stage after scoring
+    evaluation_awareness: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +199,9 @@ class RolloutScore(BaseModel):
     behavior_presence: int = Field(ge=1, le=10)
     behavior_explanation: str = ""
     secondary_qualities: list[SecondaryQuality] = Field(default_factory=list)
+    # Multi-sample judging: individual scores when judge_samples > 1
+    behavior_presence_samples: list[int] = Field(default_factory=list)
+    behavior_presence_std: float | None = None
 
 
 class BehaviorReport(BaseModel):
@@ -177,7 +217,13 @@ class BehaviorReport(BaseModel):
         description="Score -> count",
     )
     meta_judge_summary: str = ""
+    # Structured meta-judge output (beyond the free-text summary)
+    risk_level: str = ""
+    key_findings: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
     scores: list[RolloutScore] = Field(default_factory=list)
+    # Validity diagnostics for this behavior
+    validity: ValidityAnalysis | None = None
 
 
 class FullReport(BaseModel):
@@ -191,6 +237,8 @@ class FullReport(BaseModel):
     behavior_reports: list[BehaviorReport] = Field(default_factory=list)
     executive_summary: str = ""
     methodology_notes: str = ""
+    # Aggregate validity analysis across all behaviors
+    validity_summary: ValidityAnalysis | None = None
 
     @property
     def overall_elicitation_rate(self) -> float:

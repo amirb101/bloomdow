@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from bloomdow.analysis import aggregate_validity
 from bloomdow.config import PipelineConfig
 from bloomdow.llm import complete_json
 from bloomdow.models import BehaviorReport, FullReport, Transcript
@@ -21,6 +22,8 @@ async def generate_report(
     config: PipelineConfig,
 ) -> FullReport:
     """Build a FullReport including LLM-generated executive summary."""
+    validity_summary = aggregate_validity(behavior_reports)
+
     report = FullReport(
         target_model=config.target_model,
         evaluator_model=config.evaluator_model,
@@ -28,6 +31,7 @@ async def generate_report(
         num_rollouts_per_behavior=config.num_rollouts,
         diversity=config.min_cosine_distance,
         behavior_reports=behavior_reports,
+        validity_summary=validity_summary,
     )
 
     behavior_summaries = _build_behavior_summaries(behavior_reports)
@@ -159,8 +163,9 @@ def _render_markdown(report: FullReport) -> str:
     lines.append("")
 
     for br in report.behavior_reports:
+        risk_badge = f" `{br.risk_level.upper()}`" if br.risk_level else ""
         lines.extend([
-            f"### {br.behavior_name}",
+            f"### {br.behavior_name}{risk_badge}",
             "",
             f"**Description**: {br.description}",
             "",
@@ -175,15 +180,60 @@ def _render_markdown(report: FullReport) -> str:
             count = br.score_distribution.get(score, 0)
             bar = "#" * count
             lines.append(f"  {score:2d} | {bar} ({count})")
+        lines.extend(["", "**Meta-judge analysis**:", "", br.meta_judge_summary or "*Not generated.*", ""])
+
+        if br.key_findings:
+            lines.append("**Key findings**:")
+            for kf in br.key_findings:
+                lines.append(f"- {kf}")
+            lines.append("")
+        if br.recommendations:
+            lines.append("**Recommendations**:")
+            for rec in br.recommendations:
+                lines.append(f"- {rec}")
+            lines.append("")
+
+        if br.validity:
+            lines.append("**Validity diagnostics**:")
+            v = br.validity
+            if v.genrm_elicitation_correlation and v.genrm_elicitation_correlation.r is not None:
+                c = v.genrm_elicitation_correlation
+                lines.append(f"- genRM → elicitation: Spearman r = {c.r:.3f} (n={c.n}) — {c.interpretation}")
+            if v.awareness_elicitation_correlation and v.awareness_elicitation_correlation.r is not None:
+                c = v.awareness_elicitation_correlation
+                lines.append(f"- Awareness → elicitation: Spearman r = {c.r:.3f} (n={c.n}) — {c.interpretation}")
+            if v.judge_variance and v.judge_variance.mean_std is not None:
+                jv = v.judge_variance
+                lines.append(f"- Judge variance: mean σ = {jv.mean_std:.2f}, max σ = {jv.max_std:.2f} (n={jv.n_multi_sampled} multi-sampled)")
+            if v.mean_evaluation_awareness is not None:
+                lines.append(f"- Mean evaluation awareness: {v.mean_evaluation_awareness:.1f}/10 ({v.high_awareness_fraction:.0%} ≥ 7)")
+            lines.append("")
+
+        lines.extend(["---", ""])
+
+    if report.validity_summary:
         lines.extend([
-            "",
-            "**Meta-judge analysis**:",
-            "",
-            br.meta_judge_summary or "*Not generated.*",
-            "",
-            "---",
+            "## Validity Summary (Pooled)",
             "",
         ])
+        vs = report.validity_summary
+        if vs.genrm_elicitation_correlation and vs.genrm_elicitation_correlation.r is not None:
+            c = vs.genrm_elicitation_correlation
+            lines.append(f"**genRM signal**: pooled Spearman r = {c.r:.3f} (n={c.n})")
+            lines.append(f"> {c.interpretation}")
+            lines.append("")
+        if vs.awareness_elicitation_correlation and vs.awareness_elicitation_correlation.r is not None:
+            c = vs.awareness_elicitation_correlation
+            lines.append(f"**Evaluation-awareness confound**: pooled Spearman r = {c.r:.3f} (n={c.n})")
+            lines.append(f"> {c.interpretation}")
+            lines.append("")
+        if vs.judge_variance and vs.judge_variance.mean_std is not None:
+            jv = vs.judge_variance
+            lines.append(f"**Judge variance**: mean σ = {jv.mean_std:.2f}, max σ = {jv.max_std:.2f}")
+            lines.append("")
+        if vs.mean_evaluation_awareness is not None:
+            lines.append(f"**Mean evaluation awareness**: {vs.mean_evaluation_awareness:.1f}/10 ({vs.high_awareness_fraction:.0%} of transcripts scored ≥ 7)")
+            lines.append("")
 
     if report.methodology_notes:
         lines.extend([

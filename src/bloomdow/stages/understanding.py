@@ -167,37 +167,44 @@ async def _enforce_understanding_diversity_with_behavior(
     return understandings
 
 
+async def _understand_one_behavior(
+    behavior: BehaviorDimension,
+    config: PipelineConfig,
+) -> tuple[str, list[UnderstandingDocument]]:
+    """Generate and diversity-enforce understandings for a single behavior."""
+    understandings = await _generate_diverse_understandings(behavior, config)
+    if not understandings:
+        logger.error("No understandings generated for %s", behavior.name)
+        return behavior.name, []
+    understandings = await _enforce_understanding_diversity_with_behavior(
+        behavior, understandings, config
+    )
+    logger.info("Understanding for %s: %d diverse documents", behavior.name, len(understandings))
+    return behavior.name, understandings
+
+
 async def run_understanding(
     behaviors: list[BehaviorDimension],
     config: PipelineConfig,
 ) -> dict[str, list[UnderstandingDocument]]:
-    """Generate N diverse understanding documents per behavior with diversity enforcement."""
+    """Generate N diverse understanding documents per behavior — behaviors run in parallel."""
     logger.info(
         "Stage 2 — Understanding: generating %d diverse understandings for %d behaviors",
         config.num_diverse_understandings,
         len(behaviors),
     )
 
+    tasks = [_understand_one_behavior(behavior, config) for behavior in behaviors]
+    outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+
     result: dict[str, list[UnderstandingDocument]] = {}
-
-    for behavior in behaviors:
-        understandings = await _generate_diverse_understandings(behavior, config)
-        if not understandings:
-            logger.error("No understandings generated for %s", behavior.name)
+    for outcome in outcomes:
+        if isinstance(outcome, Exception):
+            logger.error("Understanding task failed: %s", outcome)
             continue
-        understandings = await _enforce_understanding_diversity_with_behavior(
-            behavior, understandings, config
-        )
-        result[behavior.name] = understandings
-        logger.info(
-            "Understanding for %s: %d diverse documents",
-            behavior.name,
-            len(understandings),
-        )
+        behavior_name, docs = outcome
+        if docs:
+            result[behavior_name] = docs
 
-    logger.info(
-        "Understanding complete for %d/%d behaviors",
-        len(result),
-        len(behaviors),
-    )
+    logger.info("Understanding complete for %d/%d behaviors", len(result), len(behaviors))
     return result
