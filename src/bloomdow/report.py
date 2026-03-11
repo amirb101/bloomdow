@@ -153,13 +153,24 @@ def _render_markdown(report: FullReport) -> str:
     ]
 
     # Comparison table
-    lines.append("| Behavior | Elicitation Rate | Avg Score | Rollouts |")
-    lines.append("|----------|:----------------:|:---------:|:--------:|")
-    for br in report.behavior_reports:
-        lines.append(
-            f"| {br.behavior_name} | {br.elicitation_rate:.0%} | "
-            f"{br.average_score:.1f}/10 | {br.num_rollouts} |"
-        )
+    any_refused = any(br.refusal_count > 0 for br in report.behavior_reports)
+    if any_refused:
+        lines.append("| Behavior | Elicitation Rate | Avg Score | Rollouts | Refusal Rate |")
+        lines.append("|----------|:----------------:|:---------:|:--------:|:------------:|")
+        for br in report.behavior_reports:
+            refusal_str = f"{br.refusal_rate:.0%}" if br.refusal_count > 0 else "0%"
+            lines.append(
+                f"| {br.behavior_name} | {br.elicitation_rate:.0%} | "
+                f"{br.average_score:.1f}/10 | {br.num_rollouts} | {refusal_str} |"
+            )
+    else:
+        lines.append("| Behavior | Elicitation Rate | Avg Score | Rollouts |")
+        lines.append("|----------|:----------------:|:---------:|:--------:|")
+        for br in report.behavior_reports:
+            lines.append(
+                f"| {br.behavior_name} | {br.elicitation_rate:.0%} | "
+                f"{br.average_score:.1f}/10 | {br.num_rollouts} |"
+            )
     lines.append("")
 
     for br in report.behavior_reports:
@@ -181,6 +192,14 @@ def _render_markdown(report: FullReport) -> str:
             bar = "#" * count
             lines.append(f"  {score:2d} | {bar} ({count})")
         lines.extend(["", "**Meta-judge analysis**:", "", br.meta_judge_summary or "*Not generated.*", ""])
+
+        if br.refusal_count > 0:
+            type_str = ", ".join(f"`{k}` ×{v}" for k, v in br.refusal_types.items())
+            lines.append(
+                f"> **Content filter refusals**: {br.refusal_count}/{br.num_rollouts + br.refusal_count} "
+                f"transcripts ({br.refusal_rate:.0%}) — {type_str}"
+            )
+            lines.append("")
 
         if br.key_findings:
             lines.append("**Key findings**:")

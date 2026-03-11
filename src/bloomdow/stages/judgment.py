@@ -328,6 +328,21 @@ async def run_judgment(
         if num > 0:
             validity.disputed_fraction = sum(1 for s in scores if s.disputed) / num
 
+        # Aggregate refusal stats from transcripts
+        from collections import Counter as _Counter
+        refused_transcripts = [t for t in behavior_transcripts if t.target_refused]
+        refusal_count = len(refused_transcripts)
+        total_transcripts = len(behavior_transcripts)
+        refusal_rate = refusal_count / total_transcripts if total_transcripts else 0.0
+        refusal_types = dict(_Counter(
+            t.refusal_error for t in refused_transcripts if t.refusal_error
+        ))
+        if refusal_count:
+            logger.info(
+                "%s: %d/%d transcripts had target refusals — %s",
+                behavior_name, refusal_count, total_transcripts, refusal_types,
+            )
+
         reports.append(
             BehaviorReport(
                 behavior_name=behavior_name,
@@ -342,6 +357,9 @@ async def run_judgment(
                 recommendations=recommendations,
                 scores=scores,
                 validity=validity,
+                refusal_count=refusal_count,
+                refusal_rate=refusal_rate,
+                refusal_types=refusal_types,
             )
         )
 

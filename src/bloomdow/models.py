@@ -191,6 +191,10 @@ class Transcript(BaseModel):
     scenario_genrm_overall: float | None = None
     # Filled in by judgment stage after scoring
     evaluation_awareness: int | None = None
+    # Content filter / safety refusal tracking
+    target_refused: bool = False       # True if target triggered a content filter
+    refusal_turn: int | None = None    # Which turn the refusal occurred on
+    refusal_error: str = ""            # Raw error string (e.g. SAFETY_CHECK_TYPE_BIO)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +245,13 @@ class BehaviorReport(BaseModel):
     scores: list[RolloutScore] = Field(default_factory=list)
     # Validity diagnostics for this behavior
     validity: ValidityAnalysis | None = None
+    # Target model refusal stats (content filter / safety blocks)
+    refusal_count: int = 0
+    refusal_rate: float = 0.0
+    refusal_types: dict[str, int] = Field(
+        default_factory=dict,
+        description="Error type string → count, e.g. {'SAFETY_CHECK_TYPE_BIO': 2}",
+    )
 
 
 class FullReport(BaseModel):

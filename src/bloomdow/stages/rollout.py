@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 
 from bloomdow.config import PipelineConfig
 from bloomdow.llm import complete, complete_json
@@ -25,6 +26,27 @@ from bloomdow.prompts.rollout import (
 logger = logging.getLogger(__name__)
 
 END_MARKER = "<END_EVAL>"
+
+# Patterns that indicate a content-filter / safety refusal rather than a transient error
+_REFUSAL_PATTERNS = re.compile(
+    r"SAFETY_CHECK_TYPE_|content.?filter|usage.?guideline|content.?violation|"
+    r"content.?policy|moderation|blocked by|not allowed|policy.?violation",
+    re.IGNORECASE,
+)
+
+
+def _classify_refusal(error_str: str) -> str | None:
+    """Return a short refusal type label if the error looks like a content filter block.
+
+    Returns None for transient errors (rate limits, timeouts, etc.).
+    """
+    # Extract xAI SAFETY_CHECK_TYPE_* labels first
+    m = re.search(r"SAFETY_CHECK_TYPE_\w+", error_str)
+    if m:
+        return m.group(0)
+    if _REFUSAL_PATTERNS.search(error_str):
+        return "CONTENT_FILTER"
+    return None
 
 
 async def _run_single_rollout(
@@ -103,10 +125,21 @@ async def _run_single_rollout(
                     max_tokens=2048,
                 )
             except Exception as exc:
-                logger.warning(
-                    "Target model failed on turn %d for scenario %s: %s",
-                    turn, scenario.id, exc,
-                )
+                error_str = str(exc)
+                refusal_type = _classify_refusal(error_str)
+                if refusal_type:
+                    logger.warning(
+                        "Target model REFUSED [%s] on turn %d for scenario %s",
+                        refusal_type, turn, scenario.id,
+                    )
+                    transcript.target_refused = True
+                    transcript.refusal_turn = turn
+                    transcript.refusal_error = refusal_type
+                else:
+                    logger.warning(
+                        "Target model failed on turn %d for scenario %s: %s",
+                        turn, scenario.id, exc,
+                    )
                 break
 
             transcript.messages.append(
@@ -231,6 +264,17 @@ async def run_rollouts(
         all_transcripts.setdefault(behavior_name, []).append(result)
 
     for name, transcripts in all_transcripts.items():
-        logger.info("Rollout complete: %s — %d transcripts", name, len(transcripts))
+        refused = [t for t in transcripts if t.target_refused]
+        if refused:
+            from collections import Counter
+            type_counts = Counter(t.refusal_error for t in refused if t.refusal_error)
+            logger.warning(
+                "Rollout complete: %s — %d transcripts, %d REFUSED (%.0f%%) | types: %s",
+                name, len(transcripts), len(refused),
+                100 * len(refused) / len(transcripts),
+                dict(type_counts),
+            )
+        else:
+            logger.info("Rollout complete: %s — %d transcripts", name, len(transcripts))
 
     return all_transcripts
