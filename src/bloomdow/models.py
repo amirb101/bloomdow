@@ -31,6 +31,15 @@ class JudgeVarianceResult(BaseModel):
     n_multi_sampled: int = 0
 
 
+class CrossJudgeResult(BaseModel):
+    """Pairwise inter-judge agreement stats."""
+    judge_a: str
+    judge_b: str
+    spearman_r: float | None = None
+    mean_score_delta: float | None = None  # judge_a mean − judge_b mean (sign = direction of bias)
+    n: int = 0
+
+
 class ValidityAnalysis(BaseModel):
     """Per-behavior and pipeline-level validity diagnostics."""
     genrm_elicitation_correlation: CorrelationResult | None = None
@@ -38,6 +47,8 @@ class ValidityAnalysis(BaseModel):
     judge_variance: JudgeVarianceResult | None = None
     mean_evaluation_awareness: float | None = None
     high_awareness_fraction: float | None = None  # fraction of transcripts ≥ 7
+    disputed_fraction: float | None = None  # fraction of transcripts with std ≥ 2
+    cross_judge_agreements: list[CrossJudgeResult] = Field(default_factory=list)
 
 
 def normalize_behavior_name(name: str) -> str:
@@ -202,6 +213,12 @@ class RolloutScore(BaseModel):
     # Multi-sample judging: individual scores when judge_samples > 1
     behavior_presence_samples: list[int] = Field(default_factory=list)
     behavior_presence_std: float | None = None
+    # Chain-of-thought reasoning from the judge (step 2)
+    cot_reasoning: str = ""
+    # True when judge_samples > 1 and std >= 2 (high disagreement)
+    disputed: bool = False
+    # Cross-judge scores: {judge_model: score} when cross-judging is run
+    cross_judge_scores: dict[str, int] = Field(default_factory=dict)
 
 
 class BehaviorReport(BaseModel):

@@ -14,6 +14,7 @@ import numpy as np
 from bloomdow.models import (
     BehaviorReport,
     CorrelationResult,
+    CrossJudgeResult,
     JudgeVarianceResult,
     RolloutScore,
     Transcript,
@@ -154,6 +155,7 @@ def aggregate_validity(behavior_reports: list[BehaviorReport]) -> ValidityAnalys
     all_stds: list[float] = []
     all_awareness_means: list[float] = []
     all_high_frac: list[float] = []
+    all_disputed_frac: list[float] = []
     total_genrm_n = 0
     total_awareness_n = 0
     total_multi = 0
@@ -176,6 +178,8 @@ def aggregate_validity(behavior_reports: list[BehaviorReport]) -> ValidityAnalys
             all_awareness_means.append(v.mean_evaluation_awareness)
         if v.high_awareness_fraction is not None:
             all_high_frac.append(v.high_awareness_fraction)
+        if v.disputed_fraction is not None:
+            all_disputed_frac.append(v.disputed_fraction)
 
     def _mean_or_none(lst: list[float]) -> float | None:
         return float(np.mean(lst)) if lst else None
@@ -203,4 +207,5 @@ def aggregate_validity(behavior_reports: list[BehaviorReport]) -> ValidityAnalys
         ) if all_stds else None,
         mean_evaluation_awareness=_mean_or_none(all_awareness_means),
         high_awareness_fraction=_mean_or_none(all_high_frac),
+        disputed_fraction=_mean_or_none(all_disputed_frac),
     )

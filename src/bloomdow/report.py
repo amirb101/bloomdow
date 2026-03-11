@@ -207,6 +207,14 @@ def _render_markdown(report: FullReport) -> str:
                 lines.append(f"- Judge variance: mean σ = {jv.mean_std:.2f}, max σ = {jv.max_std:.2f} (n={jv.n_multi_sampled} multi-sampled)")
             if v.mean_evaluation_awareness is not None:
                 lines.append(f"- Mean evaluation awareness: {v.mean_evaluation_awareness:.1f}/10 ({v.high_awareness_fraction:.0%} ≥ 7)")
+            if v.disputed_fraction is not None:
+                lines.append(f"- Disputed transcripts (σ ≥ 2): {v.disputed_fraction:.0%}")
+            if v.cross_judge_agreements:
+                lines.append("- Cross-judge agreement:")
+                for cj in v.cross_judge_agreements:
+                    r_str = f"ρ={cj.spearman_r:.3f}" if cj.spearman_r is not None else "ρ=—"
+                    d_str = f"Δ={cj.mean_score_delta:+.2f}" if cj.mean_score_delta is not None else ""
+                    lines.append(f"  - {cj.judge_a} vs {cj.judge_b}: {r_str} {d_str} (n={cj.n})")
             lines.append("")
 
         lines.extend(["---", ""])
@@ -233,6 +241,9 @@ def _render_markdown(report: FullReport) -> str:
             lines.append("")
         if vs.mean_evaluation_awareness is not None:
             lines.append(f"**Mean evaluation awareness**: {vs.mean_evaluation_awareness:.1f}/10 ({vs.high_awareness_fraction:.0%} of transcripts scored ≥ 7)")
+            lines.append("")
+        if vs.disputed_fraction is not None and vs.disputed_fraction > 0:
+            lines.append(f"**Disputed transcripts** (σ ≥ 2 across judge samples): {vs.disputed_fraction:.0%}")
             lines.append("")
 
     if report.methodology_notes:
